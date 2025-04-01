@@ -1,7 +1,7 @@
 """
 For debugging in Slicer, use the following to manipulate the module objects:
 
-mWidget = slicer.modules.MeniscusSignalIntensity.widgetRepresentation().self()
+mWidget = slicer.modules.meniscussignalintensity.widgetRepresentation().self()
 mLogic = mWidget.logic
 mNode = mLogic.getParameterNode()
 """
@@ -57,7 +57,7 @@ and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR0132
 """)
 
         # Additional initialization step after application startup is complete
-        # slicer.app.connect("startupCompleted()", registerSampleData)
+        slicer.app.connect("startupCompleted()", registerSampleData)
 
 
 #
@@ -77,34 +77,18 @@ def registerSampleData():
     # To ensure that the source code repository remains small (can be downloaded and installed quickly)
     # it is recommended to store data sets that are larger than a few MB in a Github release.
 
-    # MeniscusSignalIntensity1
-    SampleData.SampleDataLogic.registerCustomSampleDataSource(
-        # Category and sample name displayed in Sample Data module
-        category="MeniscusSignalIntensity",
-        sampleName="MeniscusSignalIntensity1",
-        # Thumbnail should have size of approximately 260x280 pixels and stored in Resources/Icons folder.
-        # It can be created by Screen Capture module, "Capture all views" option enabled, "Number of images" set to "Single".
-        thumbnailFileName=os.path.join(iconsPath, "MeniscusSignalIntensity1.png"),
-        # Download URL and target file name
-        uris="https://github.com/Slicer/SlicerTestingData/releases/download/SHA256/998cb522173839c78657f4bc0ea907cea09fd04e44601f17c82ea27927937b95",
-        fileNames="MeniscusSignalIntensity1.nrrd",
-        # Checksum to ensure file integrity. Can be computed by this command:
-        #  import hashlib; print(hashlib.sha256(open(filename, "rb").read()).hexdigest())
-        checksums="SHA256:998cb522173839c78657f4bc0ea907cea09fd04e44601f17c82ea27927937b95",
-        # This node name will be used when the data set is loaded
-        nodeNames="MeniscusSignalIntensity1",
-    )
 
-    # MeniscusSignalIntensity2
+
+    # MeniscusSignalIntensity
     SampleData.SampleDataLogic.registerCustomSampleDataSource(
         # Category and sample name displayed in Sample Data module
-        category="MeniscusSignalIntensity",
-        sampleName="MeniscusSignalIntensity2",
-        thumbnailFileName=os.path.join(iconsPath, "MeniscusSignalIntensity2.png"),
+        category="Meniscus",
+        sampleName="MRI medial and later Meniscus",
+        thumbnailFileName=os.path.join(iconsPath, "MeniscusSignalIntensity.png"),
         # Download URL and target file name
-        uris="https://github.com/Slicer/SlicerTestingData/releases/download/SHA256/1a64f3f422eb3d1c9b093d1a18da354b13bcf307907c66317e2463ee530b7a97",
-        fileNames="MeniscusSignalIntensity2.nrrd",
-        checksums="SHA256:1a64f3f422eb3d1c9b093d1a18da354b13bcf307907c66317e2463ee530b7a97",
+        uris="https://github.com/BrownBioeng/Slicer_Meniscus/releases/tag/csa_si",
+        fileNames="103.sag.ciss.reformat.1.5x1.5.nrrd",
+        #checksums="SHA256:1a64f3f422eb3d1c9b093d1a18da354b13bcf307907c66317e2463ee530b7a97",
         # This node name will be used when the data set is loaded
         nodeNames="MeniscusSignalIntensity2",
     )
@@ -121,19 +105,20 @@ class MeniscusSignalIntensityParameterNode:
     The parameters needed by module.
 
     inputVolume - The volume to threshold.
-    inputModel - Previously segmented meniscus model.
-    isMedial - If true, is medial- if flase, is lateral.
+    medialModel - Previously segmented meniscus model. MED
+    lateralModel - Previously segmented meniscus model. LAT
+    isRight - for future handling of roi extents
 
     #TO DO : determine angle discretization increments
     """
 
     inputVolume: vtkMRMLScalarVolumeNode
-    inputModel: vtkMRMLModelNode
-    isMedial: bool = True #TO DO change to radio button? medial | lateral
-    isRight: bool = True #TO DO change to radio button? right | left
+    medialModel: vtkMRMLModelNode
+    lateralModel: vtkMRMLModelNode
+    isRight: bool = True
 
-    #TO DO : determine angle discretization increments
-    angleDiscretization: Annotated[float, WithinRange(0, 180)] = 10.0
+    #TO DO : (future) determine angle discretization increments
+    angleDiscretization: Annotated[float, WithinRange(0, 180)] = 90.0
 
 
 #
@@ -244,7 +229,7 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             self._checkCanApply()
 
     def _checkCanApply(self, caller=None, event=None) -> None:
-        if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.inputModel:
+        if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.medialModel and self._parameterNode.lateralModel:
             self.ui.applyButton.toolTip = _("Compute meniscus metrics")
             self.ui.applyButton.enabled = True
         else:
@@ -260,23 +245,16 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
 
             ''' compute_model_parameters: 
             '   - roi from model bounds if necessary
-            '    - centroid mean(x,y,z) of the model bounds
+            '   - centroid mean(x,y,z) of the model bounds
             '   
             '   - reference angle
             '''
 
 
             # meniscus centroid and planes
-            self.logic.compute_model_parameters(self.ui.inputVolSelector.currentNode(), self.ui.inputModelSelector.currentNode())
-
-            #                    self.ui.isMedial.checked, self.ui.isRight.checked) #self.ui.imageThresholdSliderWidget.value,
-
-            '''Compute inverted output (if needed)
-            if self.ui.invertedOutputSelector.currentNode():
-                # If additional output volume is selected then result with inverted threshold is written there
-                self.logic.process(self.ui.inputSelector.currentNode(), self.ui.invertedOutputSelector.currentNode(),
-                                   self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
-            '''
+            self.logic.compute_model_parameters(self.ui.inputVolSelector.currentNode(), self.ui.inputMedialSelector.currentNode(),self.ui.right_rb.isChecked(), True)
+            
+            self.logic.compute_model_parameters(self.ui.inputVolSelector.currentNode(), self.ui.inputLateralSelector.currentNode(),self.ui.right_rb.isChecked(), False)
 
 #
 # MeniscusSignalIntensityLogic
@@ -303,6 +281,8 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
     def compute_model_parameters(self,
                 inputVolume: vtkMRMLScalarVolumeNode,
                 inputModel: vtkMRMLModelNode,
+                isRight: bool = True,
+                isMed: bool = True,
                 showResult: bool = True) -> None:
         """
         Run the processing algorithm.
@@ -325,11 +305,11 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
 
         # roi, centroid, and angle discretization
         roiNode = self._generateRoi_fromMenicus(inputModel)
-        meniscus_centroid = roiNode.GetCenterXYZ()
+        meniscus_centroid = roiNode.GetCenter()
 
         mcenter_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
         mcenter_markup.SetName("Meniscus Centroid")
-        mcenter_markup.AddFiducial(meniscus_centroid[0], meniscus_centroid[1], meniscus_centroid[2])
+        mcenter_markup.AddControlPoint(meniscus_centroid[0], meniscus_centroid[1], meniscus_centroid[2])
         mcenter_markup.SetLocked(True) 
         
 
@@ -349,11 +329,20 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         bounds = [0.0] * 6
         modelPolyData.GetBounds(bounds)
 
+        import numpy as np
+
+        # construct min and max coordinates of bounding box
+        bb_min = np.array([bounds[0], bounds[2], bounds[4]])
+        bb_max = np.array([bounds[1], bounds[3], bounds[5]])
+
+        bb_center = (bb_min + bb_max) / 2
+        bb_size = bb_max - bb_min
+
         # Create a new ROI node and set its parameters
         roiNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsROINode")
         roiNode.SetName("ROI from Meniscus Model")
-        roiNode.SetXYZ(bounds[0], bounds[2], bounds[4])
-        roiNode.SetRadiusXYZ(bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4])
+        roiNode.SetCenter(bb_center)
+        roiNode.SetSize(bb_size)
 
         roiNode.SetLocked(True)  # Lock the ROI to prevent user modifications
         #roiNode.SetVisibility3DFill(False)  # Hide the fill color

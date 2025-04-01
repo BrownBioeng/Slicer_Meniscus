@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>586</width>
-    <height>331</height>
+    <height>496</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
@@ -51,12 +51,12 @@
       <item row="2" column="0">
        <widget class="QLabel" name="label_inputModel">
         <property name="text">
-         <string>Input Model</string>
+         <string>Medial Meniscus Model</string>
         </property>
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="qMRMLNodeComboBox" name="inputModelSelector">
+       <widget class="qMRMLNodeComboBox" name="inputMedialSelector">
         <property name="nodeTypes">
          <stringlist notr="true"/>
         </property>
@@ -67,43 +67,76 @@
          <string notr="true"/>
         </property>
         <property name="SlicerParameterName" stdset="0">
-         <string>inputModel</string>
+         <string>medialModel</string>
         </property>
        </widget>
       </item>
       <item row="3" column="0">
        <widget class="QLabel" name="label_isMedial">
         <property name="text">
-         <string>Medial:</string>
+         <string>Lateral Meniscus Model: </string>
         </property>
        </widget>
       </item>
       <item row="3" column="1">
-       <widget class="QCheckBox" name="isMedial_CheckBox">
-        <property name="toolTip">
-         <string>If checked, values above threshold are set to 0. If unchecked, values below are set to 0.</string>
+       <widget class="qMRMLNodeComboBox" name="inputLateralSelector">
+        <property name="nodeTypes">
+         <stringlist notr="true"/>
         </property>
-        <property name="text">
-         <string/>
+        <property name="hideChildNodeTypes">
+         <stringlist notr="true"/>
         </property>
-        <property name="invertThreshold" stdset="0">
-         <string/>
+        <property name="interactionNodeSingletonTag">
+         <string notr="true"/>
         </property>
         <property name="SlicerParameterName" stdset="0">
-         <string>isMedial</string>
+         <string>lateralModel</string>
         </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="label_side">
+        <property name="text">
+         <string>Side:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QRadioButton" name="right_rb">
+        <property name="text">
+         <string>Right</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">buttonGroup</string>
+        </attribute>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QRadioButton" name="left_rb">
+        <property name="text">
+         <string>Left</string>
+        </property>
+        <attribute name="buttonGroup">
+         <string notr="true">buttonGroup</string>
+        </attribute>
        </widget>
       </item>
      </layout>
     </widget>
    </item>
    <item>
-    <widget class="QCheckBox" name="side_Rcb">
-     <property name="text">
-      <string>Right</string>
+    <widget class="QPushButton" name="applyButton">
+     <property name="enabled">
+      <bool>false</bool>
      </property>
-     <property name="SlicerParameterName" stdset="0">
-      <string>isRight</string>
+     <property name="toolTip">
+      <string>Run the algorithm.</string>
+     </property>
+     <property name="text">
+      <string>Apply</string>
      </property>
     </widget>
    </item>
@@ -123,23 +156,10 @@
       <string>Outputs</string>
      </property>
      <layout class="QFormLayout" name="formLayout_4">
-      <item row="0" column="0">
+      <item row="0" column="0" colspan="2">
        <widget class="qMRMLTableView" name="MRMLTableView"/>
       </item>
      </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="QPushButton" name="applyButton">
-     <property name="enabled">
-      <bool>false</bool>
-     </property>
-     <property name="toolTip">
-      <string>Run the algorithm.</string>
-     </property>
-     <property name="text">
-      <string>Apply</string>
-     </property>
     </widget>
    </item>
    <item>
@@ -202,7 +222,7 @@
   <connection>
    <sender>MeniscusSignalIntensity</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>inputModelSelector</receiver>
+   <receiver>inputMedialSelector</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
     <hint type="sourcelabel">
@@ -215,5 +235,24 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>MeniscusSignalIntensity</sender>
+   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
+   <receiver>inputLateralSelector</receiver>
+   <slot>setMRMLScene(vtkMRMLScene*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>292</x>
+     <y>247</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>354</x>
+     <y>108</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
+ <buttongroups>
+  <buttongroup name="buttonGroup"/>
+ </buttongroups>
 </ui>
