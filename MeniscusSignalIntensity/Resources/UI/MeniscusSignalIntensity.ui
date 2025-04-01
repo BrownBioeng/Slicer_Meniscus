@@ -66,6 +66,9 @@
         <property name="interactionNodeSingletonTag">
          <string notr="true"/>
         </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>inputModel</string>
+        </property>
        </widget>
       </item>
       <item row="3" column="0">
@@ -86,9 +89,22 @@
         <property name="invertThreshold" stdset="0">
          <string/>
         </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>isMedial</string>
+        </property>
        </widget>
       </item>
      </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QCheckBox" name="side_Rcb">
+     <property name="text">
+      <string>Right</string>
+     </property>
+     <property name="SlicerParameterName" stdset="0">
+      <string>isRight</string>
+     </property>
     </widget>
    </item>
    <item>
@@ -106,7 +122,11 @@
      <property name="text">
       <string>Outputs</string>
      </property>
-     <layout class="QFormLayout" name="formLayout_4"/>
+     <layout class="QFormLayout" name="formLayout_4">
+      <item row="0" column="0">
+       <widget class="qMRMLTableView" name="MRMLTableView"/>
+      </item>
+     </layout>
     </widget>
    </item>
    <item>
@@ -148,6 +168,11 @@
    <class>qMRMLNodeComboBox</class>
    <extends>QWidget</extends>
    <header>qMRMLNodeComboBox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>qMRMLTableView</class>
+   <extends>QTableView</extends>
+   <header>qMRMLTableView.h</header>
   </customwidget>
   <customwidget>
    <class>qMRMLWidget</class>

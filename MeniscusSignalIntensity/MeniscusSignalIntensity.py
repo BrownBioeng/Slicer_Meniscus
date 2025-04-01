@@ -1,3 +1,12 @@
+"""
+For debugging in Slicer, use the following to manipulate the module objects:
+
+mWidget = slicer.modules.MeniscusSignalIntensity.widgetRepresentation().self()
+mLogic = mWidget.logic
+mNode = mLogic.getParameterNode()
+"""
+
+
 import logging
 import os
 from typing import Annotated, Optional
@@ -48,7 +57,7 @@ and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR0132
 """)
 
         # Additional initialization step after application startup is complete
-        slicer.app.connect("startupCompleted()", registerSampleData)
+        # slicer.app.connect("startupCompleted()", registerSampleData)
 
 
 #
@@ -121,15 +130,10 @@ class MeniscusSignalIntensityParameterNode:
     inputVolume: vtkMRMLScalarVolumeNode
     inputModel: vtkMRMLModelNode
     isMedial: bool = True #TO DO change to radio button? medial | lateral
+    isRight: bool = True #TO DO change to radio button? right | left
 
     #TO DO : determine angle discretization increments
     angleDiscretization: Annotated[float, WithinRange(0, 180)] = 10.0
-
-    '''imageThreshold: Annotated[float, WithinRange(-100, 500)] = 100
-    invertThreshold: bool = False
-    thresholdedVolume: vtkMRMLScalarVolumeNode
-    invertedVolume: vtkMRMLScalarVolumeNode'
-    '''
 
 
 #
@@ -240,11 +244,11 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             self._checkCanApply()
 
     def _checkCanApply(self, caller=None, event=None) -> None:
-        if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.thresholdedVolume:
-            self.ui.applyButton.toolTip = _("Compute output volume")
+        if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.inputModel:
+            self.ui.applyButton.toolTip = _("Compute meniscus metrics")
             self.ui.applyButton.enabled = True
         else:
-            self.ui.applyButton.toolTip = _("Select input and output volume nodes")
+            self.ui.applyButton.toolTip = _("Select input volume and model")
             self.ui.applyButton.enabled = False
 
     def onApplyButton(self) -> None:
@@ -255,15 +259,17 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             #input volume and model 
 
             ''' compute_model_parameters: 
-            '   - centroid mean(x,y,z) of the model bounds
             '   - roi from model bounds if necessary
+            '    - centroid mean(x,y,z) of the model bounds
+            '   
             '   - reference angle
             '''
 
 
             # meniscus centroid and planes
-            self.logic.compute_model_parameters(self.ui.inputSelector.currentNode(), self.ui.inputModel.currentNode(),
-                                self.ui.isMedial.checked) #self.ui.imageThresholdSliderWidget.value,
+            self.logic.compute_model_parameters(self.ui.inputVolSelector.currentNode(), self.ui.inputModelSelector.currentNode())
+
+            #                    self.ui.isMedial.checked, self.ui.isRight.checked) #self.ui.imageThresholdSliderWidget.value,
 
             '''Compute inverted output (if needed)
             if self.ui.invertedOutputSelector.currentNode():
@@ -297,7 +303,6 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
     def compute_model_parameters(self,
                 inputVolume: vtkMRMLScalarVolumeNode,
                 inputModel: vtkMRMLModelNode,
-                isMed: bool = False,
                 showResult: bool = True) -> None:
         """
         Run the processing algorithm.
@@ -306,6 +311,8 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         :param inputModel: segemented meniscus model (M or L)
         :param isMed: if true: Medial meniscus, if false: Lateral meniscus
         :param showResult: show output volume in slice viewers
+        #TO DO : isMed: bool = True,
+                isRight: bool = True,
         """
 
         if not inputVolume or not inputModel:
@@ -317,7 +324,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         logging.info("Processing started")
 
         # roi, centroid, and angle discretization
-        roiNode = self._generateRoi_fromMenicus()
+        roiNode = self._generateRoi_fromMenicus(inputModel)
         meniscus_centroid = roiNode.GetCenterXYZ()
 
         mcenter_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
@@ -325,16 +332,17 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         mcenter_markup.AddFiducial(meniscus_centroid[0], meniscus_centroid[1], meniscus_centroid[2])
         mcenter_markup.SetLocked(True) 
         
+
         
 
         stopTime = time.time()
         logging.info(f"Processing completed in {stopTime-startTime:.2f} seconds")
 
-    def _generateRoi_fromMenicus(self) -> slicer.vtkMRMLMarkupsROINode:
+    def _generateRoi_fromMenicus(self, modelNode) -> slicer.vtkMRMLMarkupsROINode:
         """Generate a ROI from the meniscus model., variation of implementation in AutoscoperM TreeNode.py"""  
 
         # Get the model node and its polydata
-        modelNode = self._parameterNode.inputModel
+        #modelNode = self._parameterNode.inputModel
         modelPolyData = modelNode.GetPolyData()
 
         # Get the bounds of the polydata
@@ -348,7 +356,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         roiNode.SetRadiusXYZ(bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4])
 
         roiNode.SetLocked(True)  # Lock the ROI to prevent user modifications
-        roiNode.SetVisibility3DFill(False)  # Hide the fill color
+        #roiNode.SetVisibility3DFill(False)  # Hide the fill color
 
         return roiNode
 
