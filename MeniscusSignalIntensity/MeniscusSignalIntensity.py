@@ -14,7 +14,7 @@ from slicer.parameterNodeWrapper import (
     WithinRange,
 )
 
-from slicer import vtkMRMLScalarVolumeNode
+from slicer import vtkMRMLScalarVolumeNode, vtkMRMLModelNode, vtkMRMLMarkupsROINode
 
 
 #
@@ -31,9 +31,10 @@ class MeniscusSignalIntensity(ScriptedLoadableModule):
         ScriptedLoadableModule.__init__(self, parent)
         self.parent.title = _("MeniscusSignalIntensity")  # TODO: make this more human readable by adding spaces
         # TODO: set categories (folders where the module shows up in the module selector)
-        self.parent.categories = [translate("qSlicerAbstractCoreModule", "Examples")]
+        self.parent.categories = [translate("qSlicerAbstractCoreModule", "Meniscus")]
         self.parent.dependencies = []  # TODO: add here list of module names that this module requires
-        self.parent.contributors = ["John Doe (AnyWare Corp.)"]  # TODO: replace with "Firstname Lastname (Organization)"
+        self.parent.contributors = ["Amy Morton, Dominique Barnes (Brown University)"] 
+        
         # TODO: update with short description of the module and a link to online module documentation
         # _() function marks text as translatable to other languages
         self.parent.helpText = _("""
@@ -111,17 +112,24 @@ class MeniscusSignalIntensityParameterNode:
     The parameters needed by module.
 
     inputVolume - The volume to threshold.
-    imageThreshold - The value at which to threshold the input volume.
-    invertThreshold - If true, will invert the threshold.
-    thresholdedVolume - The output volume that will contain the thresholded volume.
-    invertedVolume - The output volume that will contain the inverted thresholded volume.
+    inputModel - Previously segmented meniscus model.
+    isMedial - If true, is medial- if flase, is lateral.
+
+    #TO DO : determine angle discretization increments
     """
 
     inputVolume: vtkMRMLScalarVolumeNode
-    imageThreshold: Annotated[float, WithinRange(-100, 500)] = 100
+    inputModel: vtkMRMLModelNode
+    isMedial: bool = True #TO DO change to radio button? medial | lateral
+
+    #TO DO : determine angle discretization increments
+    angleDiscretization: Annotated[float, WithinRange(0, 180)] = 10.0
+
+    '''imageThreshold: Annotated[float, WithinRange(-100, 500)] = 100
     invertThreshold: bool = False
     thresholdedVolume: vtkMRMLScalarVolumeNode
-    invertedVolume: vtkMRMLScalarVolumeNode
+    invertedVolume: vtkMRMLScalarVolumeNode'
+    '''
 
 
 #
@@ -242,16 +250,27 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
     def onApplyButton(self) -> None:
         """Run processing when user clicks "Apply" button."""
         with slicer.util.tryWithErrorDisplay(_("Failed to compute results."), waitCursor=True):
-            # Compute output
-            self.logic.process(self.ui.inputSelector.currentNode(), self.ui.outputSelector.currentNode(),
-                               self.ui.imageThresholdSliderWidget.value, self.ui.invertOutputCheckBox.checked)
 
-            # Compute inverted output (if needed)
+            #workflow:
+            #input volume and model 
+
+            ''' compute_model_parameters: 
+            '   - centroid mean(x,y,z) of the model bounds
+            '   - roi from model bounds if necessary
+            '   - reference angle
+            '''
+
+
+            # meniscus centroid and planes
+            self.logic.compute_model_parameters(self.ui.inputSelector.currentNode(), self.ui.inputModel.currentNode(),
+                                self.ui.isMedial.checked) #self.ui.imageThresholdSliderWidget.value,
+
+            '''Compute inverted output (if needed)
             if self.ui.invertedOutputSelector.currentNode():
                 # If additional output volume is selected then result with inverted threshold is written there
                 self.logic.process(self.ui.inputSelector.currentNode(), self.ui.invertedOutputSelector.currentNode(),
                                    self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
-
+            '''
 
 #
 # MeniscusSignalIntensityLogic
@@ -275,23 +294,21 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
     def getParameterNode(self):
         return MeniscusSignalIntensityParameterNode(super().getParameterNode())
 
-    def process(self,
+    def compute_model_parameters(self,
                 inputVolume: vtkMRMLScalarVolumeNode,
-                outputVolume: vtkMRMLScalarVolumeNode,
-                imageThreshold: float,
-                invert: bool = False,
+                inputModel: vtkMRMLModelNode,
+                isMed: bool = False,
                 showResult: bool = True) -> None:
         """
         Run the processing algorithm.
         Can be used without GUI widget.
-        :param inputVolume: volume to be thresholded
-        :param outputVolume: thresholding result
-        :param imageThreshold: values above/below this threshold will be set to 0
-        :param invert: if True then values above the threshold will be set to 0, otherwise values below are set to 0
+        :param inputVolume: volume MRI - containing signal intensity
+        :param inputModel: segemented meniscus model (M or L)
+        :param isMed: if true: Medial meniscus, if false: Lateral meniscus
         :param showResult: show output volume in slice viewers
         """
 
-        if not inputVolume or not outputVolume:
+        if not inputVolume or not inputModel:
             raise ValueError("Input or output volume is invalid")
 
         import time
@@ -299,19 +316,42 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         startTime = time.time()
         logging.info("Processing started")
 
-        # Compute the thresholded output volume using the "Threshold Scalar Volume" CLI module
-        cliParams = {
-            "InputVolume": inputVolume.GetID(),
-            "OutputVolume": outputVolume.GetID(),
-            "ThresholdValue": imageThreshold,
-            "ThresholdType": "Above" if invert else "Below",
-        }
-        cliNode = slicer.cli.run(slicer.modules.thresholdscalarvolume, None, cliParams, wait_for_completion=True, update_display=showResult)
-        # We don't need the CLI module node anymore, remove it to not clutter the scene with it
-        slicer.mrmlScene.RemoveNode(cliNode)
+        # roi, centroid, and angle discretization
+        roiNode = self._generateRoi_fromMenicus()
+        meniscus_centroid = roiNode.GetCenterXYZ()
+
+        mcenter_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        mcenter_markup.SetName("Meniscus Centroid")
+        mcenter_markup.AddFiducial(meniscus_centroid[0], meniscus_centroid[1], meniscus_centroid[2])
+        mcenter_markup.SetLocked(True) 
+        
+        
 
         stopTime = time.time()
         logging.info(f"Processing completed in {stopTime-startTime:.2f} seconds")
+
+    def _generateRoi_fromMenicus(self) -> slicer.vtkMRMLMarkupsROINode:
+        """Generate a ROI from the meniscus model., variation of implementation in AutoscoperM TreeNode.py"""  
+
+        # Get the model node and its polydata
+        modelNode = self._parameterNode.inputModel
+        modelPolyData = modelNode.GetPolyData()
+
+        # Get the bounds of the polydata
+        bounds = [0.0] * 6
+        modelPolyData.GetBounds(bounds)
+
+        # Create a new ROI node and set its parameters
+        roiNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsROINode")
+        roiNode.SetName("ROI from Meniscus Model")
+        roiNode.SetXYZ(bounds[0], bounds[2], bounds[4])
+        roiNode.SetRadiusXYZ(bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4])
+
+        roiNode.SetLocked(True)  # Lock the ROI to prevent user modifications
+        roiNode.SetVisibility3DFill(False)  # Hide the fill color
+
+        return roiNode
+
 
 
 #
