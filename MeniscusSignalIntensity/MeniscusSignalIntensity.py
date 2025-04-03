@@ -23,7 +23,7 @@ from slicer.parameterNodeWrapper import (
     WithinRange,
 )
 
-from slicer import vtkMRMLScalarVolumeNode, vtkMRMLModelNode, vtkMRMLMarkupsROINode, vtkMRMLTableNode
+from slicer import vtkMRMLScalarVolumeNode, vtkMRMLModelNode, vtkMRMLMarkupsPlaneNode
 
 
 #
@@ -38,23 +38,31 @@ class MeniscusSignalIntensity(ScriptedLoadableModule):
 
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
-        self.parent.title = _("MeniscusSignalIntensity")  # TODO: make this more human readable by adding spaces
+        self.parent.title = _(
+            "MeniscusSignalIntensity"
+        )  # TODO: make this more human readable by adding spaces
         # TODO: set categories (folders where the module shows up in the module selector)
         self.parent.categories = [translate("qSlicerAbstractCoreModule", "Meniscus")]
-        self.parent.dependencies = []  # TODO: add here list of module names that this module requires
-        self.parent.contributors = ["Amy Morton, Dominique Barnes (Brown University)"] 
-        
+        self.parent.dependencies = (
+            []
+        )  # TODO: add here list of module names that this module requires
+        self.parent.contributors = ["Amy Morton, Dominique Barnes (Brown University)"]
+
         # TODO: update with short description of the module and a link to online module documentation
         # _() function marks text as translatable to other languages
-        self.parent.helpText = _("""
+        self.parent.helpText = _(
+            """
 This is an example of scripted loadable module bundled in an extension.
 See more information in <a href="https://github.com/organization/projectname#MeniscusSignalIntensity">module documentation</a>.
-""")
+"""
+        )
         # TODO: replace with organization, grant and thanks
-        self.parent.acknowledgementText = _("""
+        self.parent.acknowledgementText = _(
+            """
 This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc., Andras Lasso, PerkLab,
 and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
-""")
+"""
+        )
 
         # Additional initialization step after application startup is complete
         slicer.app.connect("startupCompleted()", registerSampleData)
@@ -77,8 +85,6 @@ def registerSampleData():
     # To ensure that the source code repository remains small (can be downloaded and installed quickly)
     # it is recommended to store data sets that are larger than a few MB in a Github release.
 
-
-
     # MeniscusSignalIntensity
     SampleData.SampleDataLogic.registerCustomSampleDataSource(
         # Category and sample name displayed in Sample Data module
@@ -88,7 +94,7 @@ def registerSampleData():
         # Download URL and target file name
         uris="https://github.com/BrownBioeng/Slicer_Meniscus/releases/tag/csa_si",
         fileNames="103.sag.ciss.reformat.1.5x1.5.nrrd",
-        #checksums="SHA256:1a64f3f422eb3d1c9b093d1a18da354b13bcf307907c66317e2463ee530b7a97",
+        # checksums="SHA256:1a64f3f422eb3d1c9b093d1a18da354b13bcf307907c66317e2463ee530b7a97",
         # This node name will be used when the data set is loaded
         nodeNames="MeniscusSignalIntensity2",
     )
@@ -116,9 +122,14 @@ class MeniscusSignalIntensityParameterNode:
     medialModel: vtkMRMLModelNode
     lateralModel: vtkMRMLModelNode
     isRight: bool = True
-    #resultsTable: vtkMRMLTableNode
 
-    #TO DO : (future) determine angle discretization increments
+    medAntPlane: vtkMRMLMarkupsPlaneNode
+    medPostPlane: vtkMRMLMarkupsPlaneNode
+    latAntPlane: vtkMRMLMarkupsPlaneNode
+    latPostPlane: vtkMRMLMarkupsPlaneNode
+    # resultsTable: vtkMRMLTableNode
+
+    # TO DO : (future) determine angle discretization increments
     angleDiscretization: Annotated[float, WithinRange(0, 180)] = 90.0
 
 
@@ -146,7 +157,9 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
 
         # Load widget from .ui file (created by Qt Designer).
         # Additional widgets can be instantiated manually and added to self.layout.
-        uiWidget = slicer.util.loadUI(self.resourcePath("UI/MeniscusSignalIntensity.ui"))
+        uiWidget = slicer.util.loadUI(
+            self.resourcePath("UI/MeniscusSignalIntensity.ui")
+        )
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
 
@@ -162,11 +175,16 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
         # Connections
 
         # These connections ensure that we update parameter node when scene is closed
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
+        self.addObserver(
+            slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose
+        )
+        self.addObserver(
+            slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose
+        )
 
         # Buttons
-        self.ui.applyButton.connect("clicked(bool)", self.onApplyButton)
+        self.ui.planeComputeButton.connect("clicked(bool)", self.onComputePlanesButton)
+        self.ui.cutModelButton.connect("clicked(bool)", self.onCutModelsButton)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -186,7 +204,9 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
         if self._parameterNode:
             self._parameterNode.disconnectGui(self._parameterNodeGuiTag)
             self._parameterNodeGuiTag = None
-            self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply)
+            self.removeObserver(
+                self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply
+            )
 
     def onSceneStartClose(self, caller, event) -> None:
         """Called just before the scene is closed."""
@@ -208,11 +228,15 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
 
         # Select default input nodes if nothing is selected yet to save a few clicks for the user
         if not self._parameterNode.inputVolume:
-            firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
+            firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass(
+                "vtkMRMLScalarVolumeNode"
+            )
             if firstVolumeNode:
                 self._parameterNode.inputVolume = firstVolumeNode
 
-    def setParameterNode(self, inputParameterNode: Optional[MeniscusSignalIntensityParameterNode]) -> None:
+    def setParameterNode(
+        self, inputParameterNode: Optional[MeniscusSignalIntensityParameterNode]
+    ) -> None:
         """
         Set and observe parameter node.
         Observation is needed because when the parameter node is changed then the GUI must be updated immediately.
@@ -220,43 +244,103 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
 
         if self._parameterNode:
             self._parameterNode.disconnectGui(self._parameterNodeGuiTag)
-            self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply)
+            self.removeObserver(
+                self._parameterNode,
+                vtk.vtkCommand.ModifiedEvent,
+                self._checkCanCalcModelP,
+            )
         self._parameterNode = inputParameterNode
         if self._parameterNode:
             # Note: in the .ui file, a Qt dynamic property called "SlicerParameterName" is set on each
             # ui element that needs connection.
             self._parameterNodeGuiTag = self._parameterNode.connectGui(self.ui)
-            self.addObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply)
-            self._checkCanApply()
+            self.addObserver(
+                self._parameterNode,
+                vtk.vtkCommand.ModifiedEvent,
+                self._checkCanCalcModelP,
+            )
+            self._checkCanCalcModelP()
 
-    def _checkCanApply(self, caller=None, event=None) -> None:
-        if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.medialModel and self._parameterNode.lateralModel:
-            self.ui.applyButton.toolTip = _("Compute meniscus metrics")
-            self.ui.applyButton.enabled = True
+    def _checkCanCalcModelP(self, caller=None, event=None) -> None:
+        if (
+            self._parameterNode
+            and self._parameterNode.inputVolume
+            and self._parameterNode.medialModel
+            and self._parameterNode.lateralModel
+        ):
+            self.ui.planeComputeButton.toolTip = _("Compute meniscus metrics")
+            self.ui.planeComputeButton.enabled = True
         else:
-            self.ui.applyButton.toolTip = _("Select input volume and model")
-            self.ui.applyButton.enabled = False
+            self.ui.planeComputeButton.toolTip = _("Select input volume and model")
+            self.ui.planeComputeButton.enabled = False
 
-    def onApplyButton(self) -> None:
+    def _checkCanCutModel(self, caller=None, event=None) -> None:
+        if (
+            self._parameterNode
+            and self._parameterNode.medAntPlane
+            and self._parameterNode.medPostPlane
+            and self._parameterNode.medialModel
+            and self._parameterNode.lateralModel
+            and self._parameterNode.latAntPlane
+            and self._parameterNode.latPostPlane
+        ):
+            self.ui.cutModelButton.toolTip = _("Compute meniscus metrics")
+            self.ui.cutModelButton.enabled = True
+        else:
+            self.ui.cutModelButton.toolTip = _("Select input volume and model")
+            self.ui.cutModelButton.enabled = False
+
+    def onComputePlanesButton(self) -> None:
         """Run processing when user clicks "Apply" button."""
-        with slicer.util.tryWithErrorDisplay(_("Failed to compute results."), waitCursor=True):
+        with slicer.util.tryWithErrorDisplay(
+            _("Failed to compute results."), waitCursor=True
+        ):
 
-            #workflow:
-            #input volume and model 
+            # workflow:
+            # input volume and model
 
-            ''' compute_model_parameters: 
+            """compute_model_parameters:
             '   - model bounds:
-            '       - centroid mean(x,y,z) of the model bounds
-            '       - bound extents x2 Ant, Post
-            '   those 3 control points form plane x(ant, post)
-            '     
-            '''
-
+            '       - medial bound(x) mean(y,z) of the model bounds
+            '       - lateral bound extents each: Ant, Post
+            '   those 3 control points form plane each : (ant, post)
+            '
+            """
 
             # meniscus centroid and planes
-            self.logic.compute_model_parameters(self.ui.inputVolSelector.currentNode(), self.ui.inputMedialSelector.currentNode(),self.ui.right_rb.isChecked(), True)
-            
-            self.logic.compute_model_parameters(self.ui.inputVolSelector.currentNode(), self.ui.inputLateralSelector.currentNode(),self.ui.right_rb.isChecked(), False)
+            self.logic.compute_model_parameters(
+                self.ui.inputVolSelector.currentNode(),
+                self.ui.inputMedialSelector.currentNode(),
+                self.ui.right_rb.isChecked(),
+                True,
+            )
+
+            self.logic.compute_model_parameters(
+                self.ui.inputVolSelector.currentNode(),
+                self.ui.inputLateralSelector.currentNode(),
+                self.ui.right_rb.isChecked(),
+                False,
+            )
+
+    def onCutModelsButton(self) -> None:
+        """Run processing when user clicks "Apply" button."""
+        with slicer.util.tryWithErrorDisplay(
+            _("Failed to compute results."), waitCursor=True
+        ):
+
+            self.logic.cutModelFromPlanes(
+                self.ui.inputMedialSelector.currentNode(),
+                self._parameterNode.medAntPlane,
+                self._parameterNode.medPostPlane,
+                True,
+            )
+            self.logic.cutModelFromPlanes(
+                self.ui.inputLateralSelector.currentNode(),
+                self._parameterNode.latAntPlane,
+                self._parameterNode.latPostPlane,
+                False,
+            )
+
 
 #
 # MeniscusSignalIntensityLogic
@@ -280,18 +364,20 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
     def getParameterNode(self):
         return MeniscusSignalIntensityParameterNode(super().getParameterNode())
 
-    def compute_model_parameters(self,
-                inputVolume: vtkMRMLScalarVolumeNode,
-                inputModel: vtkMRMLModelNode,
-                isRight: bool = True,
-                isMed: bool = True,
-                showResult: bool = True) -> None:
+    def compute_model_parameters(
+        self,
+        inputVolume: vtkMRMLScalarVolumeNode,
+        inputModel: vtkMRMLModelNode,
+        isRight: bool = True,
+        isMed: bool = True,
+        showResult: bool = True,
+    ) -> None:
         """
         Run the processing algorithm.
         Can be used without GUI widget.
         :param inputVolume: volume MRI - containing signal intensity
-        :param inputModel: segemented meniscus model (M or L)
-        :param isRight: if true: Right knee, if false: Left knee 
+        :param inputModel: segmented meniscus model (M or L)
+        :param isRight: if true: Right knee, if false: Left knee
         :param isMed: if true: Medial meniscus, if false: Lateral meniscus
         :param showResult: show output volume in slice viewers
         """
@@ -304,22 +390,46 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         startTime = time.time()
         logging.info("Processing started")
 
-        # centroid, and corner extents for cut planes 
+        # centroid, and corner extents for cut planes
         self._generateCutPlaneCoords_fromMenicus(inputModel, isMed, isRight)
-
 
         stopTime = time.time()
         logging.info(f"Processing completed in {stopTime-startTime:.2f} seconds")
 
+    def cutModelFromPlanes(
+        self,
+        inputModel: vtkMRMLModelNode,
+        antPlane: vtkMRMLMarkupsPlaneNode,
+        postPlane: vtkMRMLMarkupsPlaneNode,
+        isMed: bool = True,
+    ) -> None:
+        """Cut the input model using the ant, post planes."""
+
+        planeModeler = slicer.mrmlScene.AddNewNodeByClass("vtkDynamicModelerNode")
+        planeModeler.SetToolName("PlaneCut")
+        planeModeler.SetNodeReferenceID("PlaneCut.InputModel", inputModel.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.Plane1", antPlane.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.Plane2", postPlane.GetID())
+
+        nsideModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+        psideModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+
+        planeModeler.SetNodeReferenceID(
+            "PlaneCut.OutputModel_negative", nsideModel.GetID()
+        )
+        planeModeler.SetNodeReferenceID(
+            "PlaneCut.OutputModel_positive", psideModel.GetID()
+        )
+
     def _generateCutPlaneCoords_fromMenicus(self, modelNode, isMed, isRight) -> None:
-        
+
         # Workflow:
         # bounds from model
         # centroid mean(x,y,z) of the model bounds
         # corner extents for cut planes
 
         # Get the model node and its polydata
-        #modelNode = self._parameterNode.inputModel
+        # modelNode = self._parameterNode.inputModel
         modelPolyData = modelNode.GetPolyData()
 
         # Get the bounds of the polydata
@@ -333,80 +443,81 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         bb_max = np.array([bounds[1], bounds[3], bounds[5]])
 
         bb_center = (bb_min + bb_max) / 2
-        #bb_size = bb_max - bb_min
+        bb_size = bb_max - bb_min
 
-        ''' determine planes for cases: 
+        """ determine planes for cases:
             |     R     |    L     |
             |   ((  ))    ((  ))   |
             |  lat  med | med lat  |
-        '''
-        # lateral extents in lateral roi.. can this be queried anatomically, 
-        # or do we need to convet ras to ijk based on above diagram?
-        
+        """
+        # lateral extents in lateral roi.. can this be queried anatomically,
+        # or do we need to convert ras to ijk based on above diagram?
+
         # R A S
-        midIS = (bb_min[2] + bb_max[2]) / 2
-        
-        mcenter_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
-        #mAnt_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
-        #mPost_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        mid_IS = (bb_min[2] + bb_max[2]) / 2
+
+        mcenter_markup = slicer.mrmlScene.AddNewNodeByClass(
+            "vtkMRMLMarkupsFiducialNode"
+        )
 
         if isMed:
             sML = "Med"
             if isRight:
                 medLatExtent = bb_min[0]
+                medCentroid = np.array([bb_max[0], bb_center[1], mid_IS])
             else:
                 medLatExtent = bb_max[0]
+                medCentroid = np.array([bb_min[0], bb_center[1], mid_IS])
         else:
             sML = "Lat"
             if isRight:
                 medLatExtent = bb_max[0]
+                medCentroid = np.array([bb_min[0], bb_center[1], mid_IS])
             else:
                 medLatExtent = bb_min[0]
-
+                medCentroid = np.array([bb_max[0], bb_center[1], mid_IS])
 
         mcenter_markup.SetName(f"'{sML}' Meniscus Centroid")
         mcenter_markup.AddControlPoint(bb_center[0], bb_center[1], bb_center[2])
-        mcenter_markup.SetLocked(True) 
+        mcenter_markup.SetLocked(True)
 
-        '''
-        mAnt_markup.SetName(f"Ant '{sML}' Meniscus Control Point")
-        mPost_markup.SetName(f"Post '{sML}' Meniscus Control Point")
-        mAnt_markup.AddControlPoint(medLatExtent, bb_max[1], midIS)
-        mPost_markup.AddControlPoint(medLatExtent, bb_min[1], midIS)
-        '''
         pAnt = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsPlaneNode")
+        pAnt.SetName(f"'{sML}' Meniscus Ant Plane")
         pPost = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsPlaneNode")
+        pPost.SetName(f"'{sML}' Meniscus Post Plane")
 
         aVp = vtk.vtkPlaneSource()
-        aVp.SetOrigin(bb_center[0], bb_center[1], bb_center[2])
+        aVp.SetOrigin(medCentroid[0], medCentroid[1], medCentroid[2])
         aVp.SetPoint1(medLatExtent, bb_max[1], bb_max[2])
         aVp.SetPoint2(medLatExtent, bb_max[1], bb_min[2])
 
         pAnt.SetOrigin(aVp.GetOrigin())
-        pAnt.SetNormal(aVp.GetNormal())
+        pAnt.SetNormal(aVp.GetNormal())  # TO DO: make sure normal [1] is +positive
 
         pVp = vtk.vtkPlaneSource()
-        pVp.SetOrigin(bb_center[0], bb_center[1], bb_center[2])
-        pVp.SetPoint1(medLatExtent, bb_min[1], bb_max[2]) 
+        pVp.SetOrigin(medCentroid[0], medCentroid[1], medCentroid[2])
+        pVp.SetPoint1(medLatExtent, bb_min[1], bb_max[2])
         pVp.SetPoint2(medLatExtent, bb_min[1], bb_min[2])
 
         pPost.SetOrigin(pVp.GetOrigin())
         pPost.SetNormal(pVp.GetNormal())
-        
 
-    
-        ''' Create a new ROI node and set its parameters
+        # Create a new ROI node and set its parameters
         roiNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsROINode")
         roiNode.SetName("ROI from Meniscus Model")
         roiNode.SetCenter(bb_center)
         roiNode.SetSize(bb_size)
 
         roiNode.SetLocked(True)  # Lock the ROI to prevent user modifications
-        #roiNode.SetVisibility3DFill(False)  # Hide the fill color
+        roiNode.SetDisplayVisibility(False)
 
-        return roiNode
-        '''
-
+        # TO DO set parameter nodes by planes
+        if isMed:
+            self.getParameterNode().medAntPlane = pAnt
+            self.getParameterNode().medPostPlane = pPost
+        else:
+            self.getParameterNode().latAntPlane = pAnt
+            self.getParameterNode().latPostPlane = pPost
 
 
 #
