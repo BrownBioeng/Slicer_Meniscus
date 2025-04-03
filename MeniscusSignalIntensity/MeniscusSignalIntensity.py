@@ -23,7 +23,7 @@ from slicer.parameterNodeWrapper import (
     WithinRange,
 )
 
-from slicer import vtkMRMLScalarVolumeNode, vtkMRMLModelNode, vtkMRMLMarkupsROINode
+from slicer import vtkMRMLScalarVolumeNode, vtkMRMLModelNode, vtkMRMLMarkupsROINode, vtkMRMLTableNode
 
 
 #
@@ -107,7 +107,7 @@ class MeniscusSignalIntensityParameterNode:
     inputVolume - The volume to threshold.
     medialModel - Previously segmented meniscus model. MED
     lateralModel - Previously segmented meniscus model. LAT
-    isRight - for future handling of roi extents
+    isRight - for handling of roi extets
 
     #TO DO : determine angle discretization increments
     """
@@ -116,6 +116,7 @@ class MeniscusSignalIntensityParameterNode:
     medialModel: vtkMRMLModelNode
     lateralModel: vtkMRMLModelNode
     isRight: bool = True
+    #resultsTable: vtkMRMLTableNode
 
     #TO DO : (future) determine angle discretization increments
     angleDiscretization: Annotated[float, WithinRange(0, 180)] = 90.0
@@ -244,10 +245,11 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             #input volume and model 
 
             ''' compute_model_parameters: 
-            '   - roi from model bounds if necessary
-            '   - centroid mean(x,y,z) of the model bounds
-            '   
-            '   - reference angle
+            '   - model bounds:
+            '       - centroid mean(x,y,z) of the model bounds
+            '       - bound extents x2 Ant, Post
+            '   those 3 control points form plane x(ant, post)
+            '     
             '''
 
 
@@ -289,10 +291,9 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         Can be used without GUI widget.
         :param inputVolume: volume MRI - containing signal intensity
         :param inputModel: segemented meniscus model (M or L)
+        :param isRight: if true: Right knee, if false: Left knee 
         :param isMed: if true: Medial meniscus, if false: Lateral meniscus
         :param showResult: show output volume in slice viewers
-        #TO DO : isMed: bool = True,
-                isRight: bool = True,
         """
 
         if not inputVolume or not inputModel:
@@ -303,23 +304,19 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         startTime = time.time()
         logging.info("Processing started")
 
-        # roi, centroid, and angle discretization
-        roiNode = self._generateRoi_fromMenicus(inputModel)
-        meniscus_centroid = roiNode.GetCenter()
+        # centroid, and corner extents for cut planes 
+        self._generateCutPlaneCoords_fromMenicus(inputModel, isMed, isRight)
 
-        mcenter_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
-        mcenter_markup.SetName("Meniscus Centroid")
-        mcenter_markup.AddControlPoint(meniscus_centroid[0], meniscus_centroid[1], meniscus_centroid[2])
-        mcenter_markup.SetLocked(True) 
-        
-
-        
 
         stopTime = time.time()
         logging.info(f"Processing completed in {stopTime-startTime:.2f} seconds")
 
-    def _generateRoi_fromMenicus(self, modelNode) -> slicer.vtkMRMLMarkupsROINode:
-        """Generate a ROI from the meniscus model., variation of implementation in AutoscoperM TreeNode.py"""  
+    def _generateCutPlaneCoords_fromMenicus(self, modelNode, isMed, isRight) -> None:
+        
+        # Workflow:
+        # bounds from model
+        # centroid mean(x,y,z) of the model bounds
+        # corner extents for cut planes
 
         # Get the model node and its polydata
         #modelNode = self._parameterNode.inputModel
@@ -336,9 +333,69 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         bb_max = np.array([bounds[1], bounds[3], bounds[5]])
 
         bb_center = (bb_min + bb_max) / 2
-        bb_size = bb_max - bb_min
+        #bb_size = bb_max - bb_min
 
-        # Create a new ROI node and set its parameters
+        ''' determine planes for cases: 
+            |     R     |    L     |
+            |   ((  ))    ((  ))   |
+            |  lat  med | med lat  |
+        '''
+        # lateral extents in lateral roi.. can this be queried anatomically, 
+        # or do we need to convet ras to ijk based on above diagram?
+        
+        # R A S
+        midIS = (bb_min[2] + bb_max[2]) / 2
+        
+        mcenter_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        #mAnt_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        #mPost_markup = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+
+        if isMed:
+            sML = "Med"
+            if isRight:
+                medLatExtent = bb_min[0]
+            else:
+                medLatExtent = bb_max[0]
+        else:
+            sML = "Lat"
+            if isRight:
+                medLatExtent = bb_max[0]
+            else:
+                medLatExtent = bb_min[0]
+
+
+        mcenter_markup.SetName(f"'{sML}' Meniscus Centroid")
+        mcenter_markup.AddControlPoint(bb_center[0], bb_center[1], bb_center[2])
+        mcenter_markup.SetLocked(True) 
+
+        '''
+        mAnt_markup.SetName(f"Ant '{sML}' Meniscus Control Point")
+        mPost_markup.SetName(f"Post '{sML}' Meniscus Control Point")
+        mAnt_markup.AddControlPoint(medLatExtent, bb_max[1], midIS)
+        mPost_markup.AddControlPoint(medLatExtent, bb_min[1], midIS)
+        '''
+        pAnt = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsPlaneNode")
+        pPost = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsPlaneNode")
+
+        aVp = vtk.vtkPlaneSource()
+        aVp.SetOrigin(bb_center[0], bb_center[1], bb_center[2])
+        aVp.SetPoint1(medLatExtent, bb_max[1], bb_max[2])
+        aVp.SetPoint2(medLatExtent, bb_max[1], bb_min[2])
+
+        pAnt.SetOrigin(aVp.GetOrigin())
+        pAnt.SetNormal(aVp.GetNormal())
+
+        pVp = vtk.vtkPlaneSource()
+        pVp.SetOrigin(bb_center[0], bb_center[1], bb_center[2])
+        pVp.SetPoint1(medLatExtent, bb_min[1], bb_max[2]) 
+        pVp.SetPoint2(medLatExtent, bb_min[1], bb_min[2])
+
+        pPost.SetOrigin(pVp.GetOrigin())
+        pPost.SetNormal(pVp.GetNormal())
+        
+
+    
+        ''' Create a new ROI node and set its parameters
         roiNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsROINode")
         roiNode.SetName("ROI from Meniscus Model")
         roiNode.SetCenter(bb_center)
@@ -348,6 +405,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         #roiNode.SetVisibility3DFill(False)  # Hide the fill color
 
         return roiNode
+        '''
 
 
 
