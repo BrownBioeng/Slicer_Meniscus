@@ -205,7 +205,7 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             self._parameterNode.disconnectGui(self._parameterNodeGuiTag)
             self._parameterNodeGuiTag = None
             self.removeObserver(
-                self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanApply
+                self._parameterNode, vtk.vtkCommand.ModifiedEvent, self._checkCanCalcModelP
             )
 
     def onSceneStartClose(self, caller, event) -> None:
@@ -405,21 +405,50 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
     ) -> None:
         """Cut the input model using the ant, post planes."""
 
-        planeModeler = slicer.mrmlScene.AddNewNodeByClass("vtkDynamicModelerNode")
-        planeModeler.SetToolName("PlaneCut")
+        #Output models"
+        antModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+        mixModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+        postModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+        midModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+
+        antModel.SetName(f"{inputModel.GetName()}_ant")
+        postModel.SetName(f"{inputModel.GetName()}_post")
+        midModel.SetName(f"{inputModel.GetName()}_mid")
+
+        #First, cut the anterior horn from the body
+        
+        planeModeler = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLDynamicModelerNode") #
+        planeModeler.SetToolName("Plane cut")
         planeModeler.SetNodeReferenceID("PlaneCut.InputModel", inputModel.GetID())
-        planeModeler.SetNodeReferenceID("PlaneCut.Plane1", antPlane.GetID())
-        planeModeler.SetNodeReferenceID("PlaneCut.Plane2", postPlane.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", antPlane.GetID())
 
-        nsideModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
-        psideModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", mixModel.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", antModel.GetID())
+        slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
 
-        planeModeler.SetNodeReferenceID(
-            "PlaneCut.OutputModel_negative", nsideModel.GetID()
-        )
-        planeModeler.SetNodeReferenceID(
-            "PlaneCut.OutputModel_positive", psideModel.GetID()
-        )
+        
+
+        #Next, use the 'negative leftovers from above, cut the post horn from the body
+        #Can I recycle the plaenModeler and just update the input model and plane?
+        planeModeler.SetNodeReferenceID("PlaneCut.InputModel", mixModel.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", postPlane.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", postModel.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", midModel.GetID())
+        slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
+        
+        #TO DO: hide the original meniscus model
+        #inputModel.SetVisibility(False)
+
+        #Remove the planeModeler node from the scene
+        slicer.mrmlScene.RemoveNode(planeModeler)
+        slicer.mrmlScene.RemoveNode(mixModel)
+
+
+        '''TO do; set color of each cut
+        p_display = postModel.GetDisplayNode
+        p_display.SetColor(0.0, 1.0, 0.0)  # green
+        '''
+
 
     def _generateCutPlaneCoords_fromMenicus(self, modelNode, isMed, isRight) -> None:
 
@@ -492,15 +521,31 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         aVp.SetPoint2(medLatExtent, bb_max[1], bb_min[2])
 
         pAnt.SetOrigin(aVp.GetOrigin())
-        pAnt.SetNormal(aVp.GetNormal())  # TO DO: make sure normal [1] is +positive
+        # based on order of points in vtkPlaneSource, the normal is not always correct
+        #Lat order gives anterior == +
+        #Med order gives anterior == -
+        aNorm = aVp.GetNormal()
+        a_np = np.array(aNorm)
+        if aNorm[1] < 0:
+            a_np[1] = -aNorm[1]
+
+        pAnt.SetNormal(a_np)  
+        pAnt.SetDisplayVisibility(False)
 
         pVp = vtk.vtkPlaneSource()
         pVp.SetOrigin(medCentroid[0], medCentroid[1], medCentroid[2])
         pVp.SetPoint1(medLatExtent, bb_min[1], bb_max[2])
         pVp.SetPoint2(medLatExtent, bb_min[1], bb_min[2])
 
+        #pAnt normal force to negative
         pPost.SetOrigin(pVp.GetOrigin())
-        pPost.SetNormal(pVp.GetNormal())
+        pNorm = pVp.GetNormal()
+        p_np = np.array(pNorm)
+        if pNorm[1] > 0:
+            p_np[1] = -pNorm[1]
+
+        pPost.SetNormal(p_np)
+        pPost.SetDisplayVisibility(False)
 
         # Create a new ROI node and set its parameters
         roiNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsROINode")
@@ -511,7 +556,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         roiNode.SetLocked(True)  # Lock the ROI to prevent user modifications
         roiNode.SetDisplayVisibility(False)
 
-        # TO DO set parameter nodes by planes
+        #set parameter nodes by planes
         if isMed:
             self.getParameterNode().medAntPlane = pAnt
             self.getParameterNode().medPostPlane = pPost
@@ -519,6 +564,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
             self.getParameterNode().latAntPlane = pAnt
             self.getParameterNode().latPostPlane = pPost
 
+        
 
 #
 # MeniscusSignalIntensityTest
