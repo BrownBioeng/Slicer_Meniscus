@@ -186,6 +186,12 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
         self.ui.planeComputeButton.connect("clicked(bool)", self.onComputePlanesButton)
         self.ui.cutModelButton.connect("clicked(bool)", self.onCutModelsButton)
 
+        '''for debugging- temporarily add another ui button -
+        TO DO: remove the intermediary buttons into one fx once the logic is working'''
+        self.ui.meniscusVolumeSignalButton.connect(
+            "clicked(bool)", self.meniscusVolumeSignalValsToTable
+        )
+
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
 
@@ -334,12 +340,34 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
                 self._parameterNode.medPostPlane,
                 True,
             )
+
             self.logic.cutModelFromPlanes(
                 self.ui.inputLateralSelector.currentNode(),
                 self._parameterNode.latAntPlane,
                 self._parameterNode.latPostPlane,
                 False,
             )
+            
+    def meniscusVolumeSignalValsToTable(self) -> None:
+        """Convert the signal intensity values to a table."""
+
+        # Get the input volume node and its image data
+        inputVolumeNode = self._parameterNode.inputVolume
+        imageData = inputVolumeNode.GetImageData()
+
+        # Get the scalar range of the image data
+        scalarRange = imageData.GetScalarRange()
+
+        # Create a new table node
+        tableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLTableNode")
+        tableNode.SetName("MeniscusSignalIntensityTable")
+
+        # Add columns for the signal intensity values
+        tableNode.AddColumn("SignalIntensity", "Signal Intensity", 0, 0)
+
+        # Populate the table with signal intensity values from the volume
+        for i in range(scalarRange[0], scalarRange[1] + 1):
+            tableNode.AddRow([i])
 
 
 #
@@ -418,20 +446,23 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         if isMed:
             outAntNegID = antModel.GetID()
             outAntPosID = mixModel.GetID()
+            
+            nextInputID = outAntPosID
 
-            outPostPosID = midModel.GetID()
-            outPostNegID = postModel.GetID()
+            outPostPosID = postModel.GetID()
+            outPostNegID = midModel.GetID()
 
         else:
             outAntNegID = mixModel.GetID()
             outAntPosID = antModel.GetID()
 
-            outPostPosID = postModel.GetID()
-            outPostNegID = midModel.GetID()
+            nextInputID = outAntNegID
+
+            outPostPosID = midModel.GetID()
+            outPostNegID = postModel.GetID()
             
 
         #First, cut the anterior horn from the body
-        
         planeModeler = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLDynamicModelerNode") #
         planeModeler.SetToolName("Plane cut")
         planeModeler.SetNodeReferenceID("PlaneCut.InputModel", inputModel.GetID())
@@ -441,11 +472,10 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outAntPosID)
         slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
 
-        
 
         #Next, use the 'negative leftovers from above, cut the post horn from the body
         #Can I recycle the plaenModeler and just update the input model and plane?
-        planeModeler.SetNodeReferenceID("PlaneCut.InputModel",outAntNegID)
+        planeModeler.SetNodeReferenceID("PlaneCut.InputModel",nextInputID)
         planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", postPlane.GetID())
         planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outPostPosID)
         planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outPostNegID)

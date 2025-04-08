@@ -148,6 +148,13 @@
     </widget>
    </item>
    <item>
+    <widget class="QPushButton" name="meniscusVolumeSignalButton">
+     <property name="text">
+      <string>Compute Volumes and Signal Intensities</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="ctkCollapsibleButton" name="CollapsibleButton">
      <property name="text">
       <string>Markup Settings</string>
