@@ -415,6 +415,21 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         postModel.SetName(f"{inputModel.GetName()}_post")
         midModel.SetName(f"{inputModel.GetName()}_mid")
 
+        if isMed:
+            outAntNegID = antModel.GetID()
+            outAntPosID = mixModel.GetID()
+
+            outPostPosID = midModel.GetID()
+            outPostNegID = postModel.GetID()
+
+        else:
+            outAntNegID = mixModel.GetID()
+            outAntPosID = antModel.GetID()
+
+            outPostPosID = postModel.GetID()
+            outPostNegID = midModel.GetID()
+            
+
         #First, cut the anterior horn from the body
         
         planeModeler = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLDynamicModelerNode") #
@@ -422,18 +437,18 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         planeModeler.SetNodeReferenceID("PlaneCut.InputModel", inputModel.GetID())
         planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", antPlane.GetID())
 
-        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", mixModel.GetID())
-        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", antModel.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outAntNegID)
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outAntPosID)
         slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
 
         
 
         #Next, use the 'negative leftovers from above, cut the post horn from the body
         #Can I recycle the plaenModeler and just update the input model and plane?
-        planeModeler.SetNodeReferenceID("PlaneCut.InputModel", mixModel.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.InputModel",outAntNegID)
         planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", postPlane.GetID())
-        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", postModel.GetID())
-        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", midModel.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outPostPosID)
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outPostNegID)
         slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
         
         #TO DO: hide the original meniscus model
@@ -521,13 +536,8 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         aVp.SetPoint2(medLatExtent, bb_max[1], bb_min[2])
 
         pAnt.SetOrigin(aVp.GetOrigin())
-        # based on order of points in vtkPlaneSource, the normal is not always correct
-        #Lat order gives anterior == +
-        #Med order gives anterior == -
         aNorm = aVp.GetNormal()
         a_np = np.array(aNorm)
-        if aNorm[1] < 0:
-            a_np[1] = -aNorm[1]
 
         pAnt.SetNormal(a_np)  
         pAnt.SetDisplayVisibility(False)
@@ -537,12 +547,9 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         pVp.SetPoint1(medLatExtent, bb_min[1], bb_max[2])
         pVp.SetPoint2(medLatExtent, bb_min[1], bb_min[2])
 
-        #pAnt normal force to negative
         pPost.SetOrigin(pVp.GetOrigin())
         pNorm = pVp.GetNormal()
         p_np = np.array(pNorm)
-        if pNorm[1] > 0:
-            p_np[1] = -pNorm[1]
 
         pPost.SetNormal(p_np)
         pPost.SetDisplayVisibility(False)
