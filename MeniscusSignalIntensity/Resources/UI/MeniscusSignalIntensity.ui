@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>586</width>
-    <height>496</height>
+    <width>758</width>
+    <height>710</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
@@ -171,7 +171,58 @@
      </property>
      <layout class="QFormLayout" name="formLayout_4">
       <item row="0" column="0" colspan="2">
-       <widget class="qMRMLTableView" name="MRMLTableView"/>
+       <widget class="QTableWidget" name="tableWidget">
+        <row>
+         <property name="text">
+          <string>Average Signal Intensity</string>
+         </property>
+        </row>
+        <row>
+         <property name="text">
+          <string>Maximum Signal Intensity</string>
+         </property>
+        </row>
+        <row>
+         <property name="text">
+          <string>Minimum Signal Intensity</string>
+         </property>
+        </row>
+        <row>
+         <property name="text">
+          <string>Volume</string>
+         </property>
+        </row>
+        <column>
+         <property name="text">
+          <string>MM_Anterior</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>MM_Middle</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>MM_Posterior</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>LM_Anterior</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>LM_Middle</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>LM_Posterior</string>
+         </property>
+        </column>
+       </widget>
       </item>
      </layout>
     </widget>
@@ -202,11 +253,6 @@
    <class>qMRMLNodeComboBox</class>
    <extends>QWidget</extends>
    <header>qMRMLNodeComboBox.h</header>
-  </customwidget>
-  <customwidget>
-   <class>qMRMLTableView</class>
-   <extends>QTableView</extends>
-   <header>qMRMLTableView.h</header>
   </customwidget>
   <customwidget>
    <class>qMRMLWidget</class>
