@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>586</width>
+    <width>758</width>
     <height>710</height>
    </rect>
   </property>
@@ -163,9 +163,6 @@
       <string>Outputs</string>
      </property>
      <layout class="QFormLayout" name="formLayout_4">
-      <item row="1" column="0" colspan="2">
-       <widget class="qMRMLTableView" name="MRMLTableView"/>
-      </item>
       <item row="0" column="0" colspan="2">
        <widget class="QTableWidget" name="tableWidget">
         <row>
@@ -185,7 +182,7 @@
         </row>
         <row>
          <property name="text">
-          <string>Average Volume</string>
+          <string>Volume</string>
          </property>
         </row>
         <column>
@@ -249,11 +246,6 @@
    <class>qMRMLNodeComboBox</class>
    <extends>QWidget</extends>
    <header>qMRMLNodeComboBox.h</header>
-  </customwidget>
-  <customwidget>
-   <class>qMRMLTableView</class>
-   <extends>QTableView</extends>
-   <header>qMRMLTableView.h</header>
   </customwidget>
   <customwidget>
    <class>qMRMLWidget</class>
