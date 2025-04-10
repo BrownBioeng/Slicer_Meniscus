@@ -127,10 +127,14 @@ class MeniscusSignalIntensityParameterNode:
     medPostPlane: vtkMRMLMarkupsPlaneNode
     latAntPlane: vtkMRMLMarkupsPlaneNode
     latPostPlane: vtkMRMLMarkupsPlaneNode
+
+    #debating adding in all the cut models (6) 
+
+
     # resultsTable: vtkMRMLTableNode
 
     # TO DO : (future) determine angle discretization increments
-    angleDiscretization: Annotated[float, WithinRange(0, 180)] = 90.0
+    # angleDiscretization: Annotated[float, WithinRange(0, 180)] = 90.0
 
 
 #
@@ -182,14 +186,14 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose
         )
 
-        # Buttons
-        self.ui.planeComputeButton.connect("clicked(bool)", self.onComputePlanesButton)
-        self.ui.cutModelButton.connect("clicked(bool)", self.onCutModelsButton)
 
+        # Buttons
         '''for debugging- temporarily add another ui button -
         TO DO: remove the intermediary buttons into one fx once the logic is working'''
+        self.ui.planeComputeButton.connect("clicked(bool)", self.onComputePlanesButton)
+        self.ui.cutModelButton.connect("clicked(bool)", self.onCutModelsButton)
         self.ui.meniscusVolumeSignalButton.connect(
-            "clicked(bool)", self.meniscusVolumeSignalValsToTable
+            "clicked(bool)", self.meniscusVolumeSignalVals
         )
 
         # Make sure parameter node is initialized (needed for module reload)
@@ -348,26 +352,14 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
                 False,
             )
             
-    def meniscusVolumeSignalValsToTable(self) -> None:
-        """Convert the signal intensity values to a table."""
+    def meniscusVolumeSignalVals(self) -> None:
+        '''with slicer.util.tryWithErrorDisplay(
+            _("Failed to compute results."), waitCursor=True
+        ):
+            #self.logic.'''
 
-        # Get the input volume node and its image data
-        inputVolumeNode = self._parameterNode.inputVolume
-        imageData = inputVolumeNode.GetImageData()
 
-        # Get the scalar range of the image data
-        scalarRange = imageData.GetScalarRange()
 
-        # Create a new table node
-        tableNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLTableNode")
-        tableNode.SetName("MeniscusSignalIntensityTable")
-
-        # Add columns for the signal intensity values
-        tableNode.AddColumn("SignalIntensity", "Signal Intensity", 0, 0)
-
-        # Populate the table with signal intensity values from the volume
-        for i in range(scalarRange[0], scalarRange[1] + 1):
-            tableNode.AddRow([i])
 
 
 #
@@ -400,99 +392,12 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         isMed: bool = True,
         showResult: bool = True,
     ) -> None:
-        """
-        Run the processing algorithm.
-        Can be used without GUI widget.
-        :param inputVolume: volume MRI - containing signal intensity
-        :param inputModel: segmented meniscus model (M or L)
-        :param isRight: if true: Right knee, if false: Left knee
-        :param isMed: if true: Medial meniscus, if false: Lateral meniscus
-        :param showResult: show output volume in slice viewers
-        """
 
         if not inputVolume or not inputModel:
             raise ValueError("Input or output volume is invalid")
 
-        import time
-
-        startTime = time.time()
-        logging.info("Processing started")
-
         # centroid, and corner extents for cut planes
         self._generateCutPlaneCoords_fromMenicus(inputModel, isMed, isRight)
-
-        stopTime = time.time()
-        logging.info(f"Processing completed in {stopTime-startTime:.2f} seconds")
-
-    def cutModelFromPlanes(
-        self,
-        inputModel: vtkMRMLModelNode,
-        antPlane: vtkMRMLMarkupsPlaneNode,
-        postPlane: vtkMRMLMarkupsPlaneNode,
-        isMed: bool = True,
-    ) -> None:
-        """Cut the input model using the ant, post planes."""
-
-        #Output models"
-        antModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
-        mixModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
-        postModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
-        midModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
-
-        antModel.SetName(f"{inputModel.GetName()}_ant")
-        postModel.SetName(f"{inputModel.GetName()}_post")
-        midModel.SetName(f"{inputModel.GetName()}_mid")
-
-        if isMed:
-            outAntNegID = antModel.GetID()
-            outAntPosID = mixModel.GetID()
-            
-            nextInputID = outAntPosID
-
-            outPostPosID = postModel.GetID()
-            outPostNegID = midModel.GetID()
-
-        else:
-            outAntNegID = mixModel.GetID()
-            outAntPosID = antModel.GetID()
-
-            nextInputID = outAntNegID
-
-            outPostPosID = midModel.GetID()
-            outPostNegID = postModel.GetID()
-            
-
-        #First, cut the anterior horn from the body
-        planeModeler = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLDynamicModelerNode") #
-        planeModeler.SetToolName("Plane cut")
-        planeModeler.SetNodeReferenceID("PlaneCut.InputModel", inputModel.GetID())
-        planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", antPlane.GetID())
-
-        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outAntNegID)
-        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outAntPosID)
-        slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
-
-
-        #Next, use the 'negative leftovers from above, cut the post horn from the body
-        #Can I recycle the plaenModeler and just update the input model and plane?
-        planeModeler.SetNodeReferenceID("PlaneCut.InputModel",nextInputID)
-        planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", postPlane.GetID())
-        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outPostPosID)
-        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outPostNegID)
-        slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
-        
-        #TO DO: hide the original meniscus model
-        #inputModel.SetVisibility(False)
-
-        #Remove the planeModeler node from the scene
-        slicer.mrmlScene.RemoveNode(planeModeler)
-        slicer.mrmlScene.RemoveNode(mixModel)
-
-
-        '''TO do; set color of each cut
-        p_display = postModel.GetDisplayNode
-        p_display.SetColor(0.0, 1.0, 0.0)  # green
-        '''
 
 
     def _generateCutPlaneCoords_fromMenicus(self, modelNode, isMed, isRight) -> None:
@@ -601,6 +506,90 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
             self.getParameterNode().latAntPlane = pAnt
             self.getParameterNode().latPostPlane = pPost
 
+
+    def cutModelFromPlanes(
+        self,
+        inputModel: vtkMRMLModelNode,
+        antPlane: vtkMRMLMarkupsPlaneNode,
+        postPlane: vtkMRMLMarkupsPlaneNode,
+        isMed: bool = True,
+    ) -> None:
+        """Cut the input model using the ant, post planes."""
+
+        #Output models"
+        antModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+        mixModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+        postModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+        midModel = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
+
+        antModel.SetName(f"{inputModel.GetName()}_ant")
+        postModel.SetName(f"{inputModel.GetName()}_post")
+        midModel.SetName(f"{inputModel.GetName()}_mid")
+
+        if isMed:
+            outAntNegID = antModel.GetID()
+            outAntPosID = mixModel.GetID()
+            
+            nextInputID = outAntPosID
+
+            outPostPosID = postModel.GetID()
+            outPostNegID = midModel.GetID()
+
+        else:
+            outAntNegID = mixModel.GetID()
+            outAntPosID = antModel.GetID()
+
+            nextInputID = outAntNegID
+
+            outPostPosID = midModel.GetID()
+            outPostNegID = postModel.GetID()
+            
+
+        #First, cut the anterior horn from the body
+        planeModeler = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLDynamicModelerNode") #
+        planeModeler.SetToolName("Plane cut")
+        planeModeler.SetNodeReferenceID("PlaneCut.InputModel", inputModel.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", antPlane.GetID())
+
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outAntNegID)
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outAntPosID)
+        slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
+
+
+        #Next, use the 'negative leftovers from above, cut the post horn from the body
+        #Can I recycle the plaenModeler and just update the input model and plane?
+        planeModeler.SetNodeReferenceID("PlaneCut.InputModel",nextInputID)
+        planeModeler.SetNodeReferenceID("PlaneCut.InputPlane", postPlane.GetID())
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outPostPosID)
+        planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outPostNegID)
+        slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
+        
+        '''
+        inputModel.SetVisibility(False)
+
+        # Set the color of the model node
+        antModel.GetNodeID().GetDisplayNode().SetColor(255,100,0)  # orange
+        postModel.GetDisplayNode().SetColor(0,255,0)  # green
+        midModel.GetDisplayNode().SetColor(0,100,255)  # blue
+        '''
+
+        #Remove the planeModeler node from the scene
+        slicer.mrmlScene.RemoveNode(planeModeler)
+        slicer.mrmlScene.RemoveNode(mixModel)
+
+
+        
+
+
+    @staticmethod
+    def showVolumeIn3D(volumeNode: slicer.vtkMRMLVolumeNode):
+        logic = slicer.modules.volumerendering.logic()
+        displayNode = logic.CreateVolumeRenderingDisplayNode()
+        displayNode.UnRegister(logic)
+        slicer.mrmlScene.AddNode(displayNode)
+        volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
+        logic.UpdateDisplayNodeFromVolumeNode(displayNode, volumeNode)
+        #slicer.mrmlScene.RemoveNode(slicer.util.getNode("Volume rendering ROI"))
         
 
 #
