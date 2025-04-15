@@ -129,6 +129,12 @@ class MeniscusSignalIntensityParameterNode:
     latPostPlane: vtkMRMLMarkupsPlaneNode
 
     #debating adding in all the cut models (6) 
+    medAntModel: vtkMRMLModelNode
+    medMidModel: vtkMRMLModelNode
+    medPostModel: vtkMRMLModelNode
+    latAntModel: vtkMRMLModelNode
+    latMidModel: vtkMRMLModelNode
+    latPostModel: vtkMRMLModelNode
 
 
     # resultsTable: vtkMRMLTableNode
@@ -333,24 +339,61 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             )
 
     def onCutModelsButton(self) -> None:
-        """Run processing when user clicks "Apply" button."""
+        """using the anterior and posterior defined planes, cute each meniscus into
+        anterior, mid and posterior sections."""
         with slicer.util.tryWithErrorDisplay(
             _("Failed to compute results."), waitCursor=True
         ):
-
             self.logic.cutModelFromPlanes(
                 self.ui.inputMedialSelector.currentNode(),
                 self._parameterNode.medAntPlane,
                 self._parameterNode.medPostPlane,
                 True,
             )
-
             self.logic.cutModelFromPlanes(
                 self.ui.inputLateralSelector.currentNode(),
                 self._parameterNode.latAntPlane,
                 self._parameterNode.latPostPlane,
                 False,
             )
+            #hide input model and color each output here?
+            self._parameterNode.medialModel.SetDisplayVisibility(False)
+            self._parameterNode.lateralModel.SetDisplayVisibility(False)
+
+        
+            self._parameterNode.medAntModel.GetDisplayNode().SetColor(255, 140, 0)  # red
+            self._parameterNode.medMidModel.GetDisplayNode().SetColor(140, 0, 255)  # blue
+            self._parameterNode.medPostModel.GetDisplayNode().SetColor(70, 125, 110)  # green
+            
+            self._parameterNode.latAntModel.GetDisplayNode().SetColor(255, 140, 0)  # red
+            self._parameterNode.latMidModel.GetDisplayNode().SetColor(140, 0, 255)  # blue
+            self._parameterNode.latPostModel.GetDisplayNode().SetColor(70, 125, 110)  # green
+
+            self._parameterNode.medAntModel.SetDisplayVisibility(True)
+            self._parameterNode.medMidModel.SetDisplayVisibility(True)
+            self._parameterNode.medPostModel.SetDisplayVisibility(True)
+
+            self._parameterNode.latAntModel.SetDisplayVisibility(True)
+            self._parameterNode.latMidModel.SetDisplayVisibility(True)
+            self._parameterNode.latPostModel.SetDisplayVisibility(True)
+        
+
+        self.logic.segmentFromModels(
+            self._parameterNode.inputVolume,
+            self._parameterNode.medAntModel,
+            self._parameterNode.medMidModel,
+            self._parameterNode.medPostModel,
+            True,
+        )        
+        '''self.logic.segmentFromModels(
+            self._parameterNode.inputVolume,
+            self._parameterNode.latAntModel,
+            self._parameterNode.latMidModel,
+            self._parameterNode.latPostModel,
+            True,
+        )        
+        '''
+
             
     def meniscusVolumeSignalVals(self) -> None:
         '''with slicer.util.tryWithErrorDisplay(
@@ -572,13 +615,42 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         postModel.GetDisplayNode().SetColor(0,255,0)  # green
         midModel.GetDisplayNode().SetColor(0,100,255)  # blue
         '''
+        if isMed:
+            self.getParameterNode().medAntModel = antModel
+            self.getParameterNode().medMidModel = midModel
+            self.getParameterNode().medPostModel = postModel
+        else:
+            self.getParameterNode().latAntModel = antModel
+            self.getParameterNode().latMidModel = midModel
+            self.getParameterNode().latPostModel = postModel
 
         #Remove the planeModeler node from the scene
         slicer.mrmlScene.RemoveNode(planeModeler)
         slicer.mrmlScene.RemoveNode(mixModel)
 
-
+    def segmentFromModels(
+        self,
+        inputVolume: vtkMRMLScalarVolumeNode,
+        antModel: vtkMRMLModelNode,
+        midModel: vtkMRMLModelNode,
+        postModel: vtkMRMLModelNode,
+        isMed: bool = True,
+    ) -> None:
+        """create Segmentation nodes the input volume using the ant, mid, post models.
+        https://github.com/jzeyl/3D-Slicer-Scripts/blob/master/1_set%20up%20volume%20and%20segmentation%20nodes.py
         
+        
+
+        segNode = slicer.vtkMRMLSegmentationNode()
+        slicer.mrmlScene.AddNode(segNode)
+        segNode.CreateDefaultDisplayNodes()
+        
+        theSegmentation = segNode.GetSegmentation()
+        theSegmentation.AddEmptySegment("test")
+
+        slicer.modules.segmentations.logic().CreateSegmentFromModelNode(antModel, segNode)
+        segNode.SetReferenceImageGeometryParameterFromVolumeNode(inputVolume)
+        """
 
 
     @staticmethod
