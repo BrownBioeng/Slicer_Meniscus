@@ -193,13 +193,8 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
 
 
         # Buttons
-        '''for debugging- temporarily add another ui button -
-        TO DO: remove the intermediary buttons into one fx once the logic is working'''
+       
         self.ui.planeComputeButton.connect("clicked(bool)", self.onComputePlanesButton)
-        self.ui.cutModelButton.connect("clicked(bool)", self.onCutModelsButton)
-        self.ui.meniscusVolumeSignalButton.connect(
-            "clicked(bool)", self.meniscusVolumeSignalVals
-        )
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -336,8 +331,7 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
                 self.ui.right_rb.isChecked(),
                 False,
             )
-
-    def onCutModelsButton(self) -> None:
+    #def onCutModelsButton(self) -> None:
         """using the anterior and posterior defined planes, cute each meniscus into
         anterior, mid and posterior sections."""
         with slicer.util.tryWithErrorDisplay(
@@ -378,7 +372,7 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             self._parameterNode.latPostModel.SetDisplayVisibility(True)
         
             
-    def meniscusVolumeSignalVals(self) -> None:
+   # def meniscusVolumeSignalVals(self) -> None:
         with slicer.util.tryWithErrorDisplay(
             _("Failed to compute results."), waitCursor=True
         ):
@@ -663,22 +657,6 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
     #rename volume node?
         inputVolume.SetName("MRI")
 
-        '''
-        # Create segment editor to get access to effects
-        segmentationEditorWidget = slicer.qMRMLSegmentEditorWidget()
-        segmentationEditorWidget.setMRMLScene(slicer.mrmlScene)
-        segmentEditorNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentEditorNode")
-        segmentationEditorWidget.setMRMLSegmentEditorNode(segmentEditorNode)
-        segmentationEditorWidget.setSegmentationNode(segNode)
-        segmentationEditorWidget.setSourceVolumeNode(inputVolume)
-
-        segmentationEditorWidget.setActiveEffectByName("Split volume")
-        effect = segmentationEditorWidget.activeEffect()
-        effect.setParameter("PaddingVoxels", 0)
-        effect.setParameter("ApplyToAllVisibleSegments", 1)
-        effect.self().onApply()
-        '''
-
         import SegmentStatistics
         
         segStatLogic = SegmentStatistics.SegmentStatisticsLogic()
@@ -704,18 +682,6 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
 
 
             
-
-    @staticmethod
-    def showVolumeIn3D(volumeNode: slicer.vtkMRMLVolumeNode):
-        logic = slicer.modules.volumerendering.logic()
-        displayNode = logic.CreateVolumeRenderingDisplayNode()
-        displayNode.UnRegister(logic)
-        slicer.mrmlScene.AddNode(displayNode)
-        volumeNode.AddAndObserveDisplayNodeID(displayNode.GetID())
-        logic.UpdateDisplayNodeFromVolumeNode(displayNode, volumeNode)
-        #slicer.mrmlScene.RemoveNode(slicer.util.getNode("Volume rendering ROI"))
-        
-
 #
 # MeniscusSignalIntensityTest
 #
