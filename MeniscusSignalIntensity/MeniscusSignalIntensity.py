@@ -23,7 +23,7 @@ from slicer.parameterNodeWrapper import (
     WithinRange,
 )
 
-from slicer import vtkMRMLScalarVolumeNode, vtkMRMLModelNode, vtkMRMLMarkupsPlaneNode, vtkMRMLSegmentationNode
+from slicer import vtkMRMLScalarVolumeNode, vtkMRMLModelNode, vtkMRMLMarkupsPlaneNode, vtkMRMLSegmentationNode, vtkMRMLTableNode, vtkMRMLDynamicModelerNode, vtkMRMLSegmentEditorNode
 
 
 #
@@ -115,7 +115,6 @@ class MeniscusSignalIntensityParameterNode:
     lateralModel - Previously segmented meniscus model. LAT
     isRight - for handling of roi extets
 
-    #TO DO : determine angle discretization increments
     """
 
     inputVolume: vtkMRMLScalarVolumeNode
@@ -137,7 +136,7 @@ class MeniscusSignalIntensityParameterNode:
     latPostModel: vtkMRMLModelNode
 
 
-    # resultsTable: vtkMRMLTableNode
+    resultsTable: vtkMRMLTableNode
 
     # TO DO : (future) determine angle discretization increments
     # angleDiscretization: Annotated[float, WithinRange(0, 180)] = 90.0
@@ -383,8 +382,11 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
         with slicer.util.tryWithErrorDisplay(
             _("Failed to compute results."), waitCursor=True
         ):
-        
-            segMM = self.logic.segmentFromModels(
+            
+            newTable = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLTableNode")
+            self._parameterNode.resultsTable = newTable
+
+            self.logic.segmentFromModels(
                 self._parameterNode.inputVolume,
                 self._parameterNode.medAntModel,
                 self._parameterNode.medMidModel,
@@ -392,24 +394,13 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
                 True,
             )       
 
-            segmentIDs = vtk.vtkStringArray()
-            segMM.GetSegmentation().GetSegmentIDs(segmentIDs)
-            numSegments = segmentIDs.GetNumberOfValues()
-
-            for idx in range(numSegments):
-                segmentID = segmentIDs.GetValue(idx)
-                segmentName = segMM.GetSegmentation().GetSegment(segmentID).GetName()
-                segmentVolume = f'{self._parameterNode.inputVolume.GetName()} {segmentName}'
-                segVolNode = slicer.mrmlScene.GetFirstNodeByName(segmentVolume)
-
-            '''
             self.logic.segmentFromModels(
                 self._parameterNode.inputVolume,
                 self._parameterNode.latAntModel,
                 self._parameterNode.latMidModel,
                 self._parameterNode.latPostModel,
                 False,
-            )  '''      
+            )
         
 
 
@@ -618,15 +609,8 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         planeModeler.SetNodeReferenceID("PlaneCut.OutputPositiveModel", outPostPosID)
         planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outPostNegID)
         slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
-        
-        '''
-        inputModel.SetVisibility(False)
-
-        # Set the color of the model node
-        antModel.GetNodeID().GetDisplayNode().SetColor(255,100,0)  # orange
-        postModel.GetDisplayNode().SetColor(0,255,0)  # green
-        midModel.GetDisplayNode().SetColor(0,100,255)  # blue
-        '''
+   
+   
         if isMed:
             self.getParameterNode().medAntModel = antModel
             self.getParameterNode().medMidModel = midModel
@@ -648,7 +632,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         midModel: vtkMRMLModelNode,
         postModel: vtkMRMLModelNode,
         isMed: bool = True,
-        ) -> vtkMRMLSegmentationNode:
+        ) -> None:
         #create Segmentation nodes the input volume using the ant, mid, post models.
         #https://github.com/jzeyl/3D-Slicer-Scripts/blob/master/1_set%20up%20volume%20and%20segmentation%20nodes.py
         
@@ -662,103 +646,64 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         slicer.modules.segmentations.logic().ImportModelToSegmentationNode(midModel, segNode)
         slicer.modules.segmentations.logic().ImportModelToSegmentationNode(postModel, segNode)
 
+        visibleSegmentIds = vtk.vtkStringArray()
+        segNode.GetDisplayNode().GetVisibleSegmentIDs(visibleSegmentIds)
+        nsegs = visibleSegmentIds.GetNumberOfValues()
+
+        labelmapNode = slicer.vtkMRMLLabelMapVolumeNode()
+        slicer.mrmlScene.AddNode(labelmapNode)
+        slicer.vtkSlicerSegmentationsModuleLogic.ExportSegmentsToLabelmapNode(segNode, visibleSegmentIds, labelmapNode, inputVolume)
+
+
         if isMed:
             segNode.SetName("MM")
         else:
             segNode.SetName("LM")
 
-
-        '''
-        segmentIDs = vtk.vtkStringArray()
-        segNode.GetSegmentation().GetSegmentIDs(segmentIDs)
-        numSegments = segmentIDs.GetNumberOfValues()
-
-        
-        for idx in range(numSegments):
-            segmentID = segmentIDs.GetValue(idx)
-            segmentName = segNode.GetSegmentation().GetSegment(segmentID).GetName()
-            segmentVolume = self.extractSubVolume(inputVolume, segNode, segmentID)
-            #self.showVolumeIn3D(segmentVolume)   
-        
-            #TO DO- signal intensity params 
-
-
-    def extractSubVolume(
-        self,
-        volumeNode: slicer.vtkMRMLVolumeNode,
-        segmentationNode: slicer.vtkMRMLVolumeNode,
-        segmentID: Optional[str] = None,
-    ) -> slicer.vtkMRMLVolumeNode:
-        """
-        Extracts the subvolume from the volume node using the segmentation node.
-
-        :param volumeNode: Volume node
-        :param segmentationNode: Segmentation node
-        :param segmentID: Segment ID. Default is None.
-
-        :return: Subvolume node.
-        """
-        '''
-        volumeNode = inputVolume
-        segmentationNode = segNode
     #rename volume node?
-        volumeNode.SetName("MRI")
+        inputVolume.SetName("MRI")
 
+        '''
         # Create segment editor to get access to effects
         segmentationEditorWidget = slicer.qMRMLSegmentEditorWidget()
         segmentationEditorWidget.setMRMLScene(slicer.mrmlScene)
         segmentEditorNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentEditorNode")
         segmentationEditorWidget.setMRMLSegmentEditorNode(segmentEditorNode)
-        segmentationEditorWidget.setSegmentationNode(segmentationNode)
-        segmentationEditorWidget.setSourceVolumeNode(volumeNode)
-
-        '''
-        if segmentID:
-            segmentationEditorWidget.setCurrentSegmentID(segmentID)
-        else:
-            segmentIDs = vtk.vtkStringArray()
-            segmentationNode.GetDisplayNode().GetVisibleSegmentIDs(segmentIDs)
-            segmentID = segmentIDs.GetValue(0)
-        '''
+        segmentationEditorWidget.setSegmentationNode(segNode)
+        segmentationEditorWidget.setSourceVolumeNode(inputVolume)
 
         segmentationEditorWidget.setActiveEffectByName("Split volume")
         effect = segmentationEditorWidget.activeEffect()
         effect.setParameter("PaddingVoxels", 0)
         effect.setParameter("ApplyToAllVisibleSegments", 1)
         effect.self().onApply()
-
-          
-        
         '''
 
-        segmentIDs = vtk.vtkStringArray()
-        segNode.GetSegmentation().GetSegmentIDs(segmentIDs)
-        numSegments = segmentIDs.GetNumberOfValues()
-
-        for idx in range(numSegments):
-            segmentID = segmentIDs.GetValue(idx)
-            segmentName = segNode.GetSegmentation().GetSegment(segmentID).GetName()
-            segmentVolume = f'{inputVolume.GetName()} {segmentName}'
-            segVolNode = slicer.mrmlScene.GetFirstNodeByName(segmentVolume)
-            #self.showVolumeIn3D(segmentVolume) 
-
-
+        import SegmentStatistics
         
-                        folderName = volumeNode.GetName() + "split"
+        segStatLogic = SegmentStatistics.SegmentStatisticsLogic()
+        segStatParams = segStatLogic.getParameterNode()
+        segStatParams.SetParameter("Segmentation", segNode.GetID())
+        segStatParams.SetParameter("LabelMap", labelmapNode.GetID())
+        segStatParams.SetParameter("ScalarVolume", inputVolume.GetID())
+        
+        segStatParams.SetParameter("LabelmapSegmentStatisticsPlugin.enabled", str(False))
+        segStatParams.SetParameter("ScalarVolumeSegmentStatisticsPlugin.enabled", str(True))
 
-        pluginHandler = slicer.qSlicerSubjectHierarchyPluginHandler().instance()
-        folderPlugin = pluginHandler.pluginByName("Folder")
-        shNode = slicer.vtkMRMLSubjectHierarchyNode.GetSubjectHierarchyNode(slicer.mrmlScene)
-        folderId = shNode.GetItemByName(folderName)
-        nodeId = shNode.GetItemByPositionUnderParent(folderId, 0)
+        segStatLogic.computeStatistics()
+        
+        segStatLogic.exportToTable(self.getParameterNode().resultsTable)
+        segStatLogic.showTable(self.getParameterNode().resultsTable)
 
-        folderPlugin.setDisplayVisibility(folderId, 1)
-        slicer.mrmlScene.RemoveNode(shNode.GetDisplayNodeForItem(folderId))  # remove the folder
+        stats = segStatLogic.getStatistics()
+        sid = stats.get("SegmentIDs")
+    
+        outputFilename = slicer.app.temporaryPath + f'{segNode.GetName()}'+"SegmentStatistics.csv"
+        #open this directory
+        segStatLogic.exportToCSVFile(outputFilename)
 
-        #return shNode.GetItemDataNode(nodeId)  # return the node in the folder
-        '''
 
-        return segNode
+            
 
     @staticmethod
     def showVolumeIn3D(volumeNode: slicer.vtkMRMLVolumeNode):
