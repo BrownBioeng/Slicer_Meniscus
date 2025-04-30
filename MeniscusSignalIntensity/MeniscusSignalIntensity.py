@@ -113,15 +113,12 @@ class MeniscusSignalIntensityParameterNode:
     inputVolume - The volume to threshold.
     medialModel - Previously segmented meniscus model. MED
     lateralModel - Previously segmented meniscus model. LAT
-    isRight - for handling of roi extets
 
     """
 
     inputVolume: vtkMRMLScalarVolumeNode
     medialModel: vtkMRMLModelNode
     lateralModel: vtkMRMLModelNode
-    isRight: bool = True
-
     medAntPlane: vtkMRMLMarkupsPlaneNode
     medPostPlane: vtkMRMLMarkupsPlaneNode
     latAntPlane: vtkMRMLMarkupsPlaneNode
@@ -316,39 +313,70 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             '   those 3 control points form plane each : (ant, post)
             '
             """
+            #not necessarily intuitive.. but the swap to compute left- is to swap Med<->Lat
+            medTrue = True
+            latTrue = False
 
-            # meniscus centroid and planes
-            self.logic.compute_model_parameters(
-                self.ui.inputVolSelector.currentNode(),
-                self.ui.inputMedialSelector.currentNode(),
-                self.ui.right_rb.isChecked(),
-                True,
-            )
+            if self.ui.right_rb.isChecked():
+                # meniscus centroid and planes
+                self.logic.compute_model_parameters(
+                    self.ui.inputVolSelector.currentNode(),
+                    self.ui.inputMedialSelector.currentNode(),
+                    True,
+                )
 
-            self.logic.compute_model_parameters(
-                self.ui.inputVolSelector.currentNode(),
-                self.ui.inputLateralSelector.currentNode(),
-                self.ui.right_rb.isChecked(),
-                False,
-            )
-    #def onCutModelsButton(self) -> None:
-        """using the anterior and posterior defined planes, cute each meniscus into
-        anterior, mid and posterior sections."""
-        with slicer.util.tryWithErrorDisplay(
-            _("Failed to compute results."), waitCursor=True
-        ):
-            self.logic.cutModelFromPlanes(
-                self.ui.inputMedialSelector.currentNode(),
-                self._parameterNode.medAntPlane,
-                self._parameterNode.medPostPlane,
-                True,
-            )
-            self.logic.cutModelFromPlanes(
-                self.ui.inputLateralSelector.currentNode(),
-                self._parameterNode.latAntPlane,
-                self._parameterNode.latPostPlane,
-                False,
-            )
+                self.logic.compute_model_parameters(
+                    self.ui.inputVolSelector.currentNode(),
+                    self.ui.inputLateralSelector.currentNode(),
+                    False,
+                )
+                """using the anterior and posterior defined planes, cute each meniscus into
+                anterior, mid and posterior sections."""
+
+                self.logic.cutModelFromPlanes(
+                    self.ui.inputMedialSelector.currentNode(),
+                    self._parameterNode.medAntPlane,
+                    self._parameterNode.medPostPlane,
+                    medTrue,
+                )
+                self.logic.cutModelFromPlanes(
+                    self.ui.inputLateralSelector.currentNode(),
+                    self._parameterNode.latAntPlane,
+                    self._parameterNode.latPostPlane,
+                    latTrue,
+                )
+            else:
+                
+                self.logic.compute_model_parameters(
+                    self.ui.inputVolSelector.currentNode(),
+                    self.ui.inputLateralSelector.currentNode(),
+                    True,
+                )
+
+                self.logic.compute_model_parameters(
+                    self.ui.inputVolSelector.currentNode(),
+                    self.ui.inputMedialSelector.currentNode(),
+                    False,
+                )
+                
+                """using the anterior and posterior defined planes, cute each meniscus into
+                anterior, mid and posterior sections."""
+
+                self.logic.cutModelFromPlanes(
+                    self.ui.inputLateralSelector.currentNode(),
+                    self._parameterNode.medAntPlane,
+                    self._parameterNode.medPostPlane,
+                    medTrue,
+                )
+                self.logic.cutModelFromPlanes(
+                    self.ui.inputMedialSelector.currentNode(),
+                    self._parameterNode.latAntPlane,
+                    self._parameterNode.latPostPlane,
+                    latTrue,
+                )
+
+
+
             #hide input model and color each output here?
             self._parameterNode.medialModel.SetDisplayVisibility(False)
             self._parameterNode.lateralModel.SetDisplayVisibility(False)
@@ -386,7 +414,7 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
                 self._parameterNode.medAntModel,
                 self._parameterNode.medMidModel,
                 self._parameterNode.medPostModel,
-                True,
+                medTrue,
             )       
 
             self.logic.segmentFromModels(
@@ -394,7 +422,7 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
                 self._parameterNode.latAntModel,
                 self._parameterNode.latMidModel,
                 self._parameterNode.latPostModel,
-                False,
+                latTrue,
             )
         
 
@@ -429,7 +457,6 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         self,
         inputVolume: vtkMRMLScalarVolumeNode,
         inputModel: vtkMRMLModelNode,
-        isRight: bool = True,
         isMed: bool = True,
         showResult: bool = True,
     ) -> None:
@@ -438,10 +465,10 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
             raise ValueError("Input or output volume is invalid")
 
         # centroid, and corner extents for cut planes
-        self._generateCutPlaneCoords_fromMenicus(inputModel, isMed, isRight)
+        self._generateCutPlaneCoords_fromMenicus(inputModel, isMed)
 
 
-    def _generateCutPlaneCoords_fromMenicus(self, modelNode, isMed, isRight) -> None:
+    def _generateCutPlaneCoords_fromMenicus(self, modelNode, isMed) -> None:
 
         # Workflow:
         # bounds from model
@@ -482,20 +509,12 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
 
         if isMed:
             sML = "Med"
-            if isRight:
-                medLatExtent = bb_min[0]
-                medCentroid = np.array([bb_max[0], bb_center[1], mid_IS])
-            else:
-                medLatExtent = bb_max[0]
-                medCentroid = np.array([bb_min[0], bb_center[1], mid_IS])
+            medLatExtent = bb_min[0]
+            medCentroid = np.array([bb_max[0], bb_center[1], mid_IS])
         else:
             sML = "Lat"
-            if isRight:
-                medLatExtent = bb_max[0]
-                medCentroid = np.array([bb_min[0], bb_center[1], mid_IS])
-            else:
-                medLatExtent = bb_min[0]
-                medCentroid = np.array([bb_max[0], bb_center[1], mid_IS])
+            medLatExtent = bb_max[0]
+            medCentroid = np.array([bb_min[0], bb_center[1], mid_IS])
 
         mcenter_markup.SetName(f"'{sML}' Meniscus Centroid")
         mcenter_markup.AddControlPoint(bb_center[0], bb_center[1], bb_center[2])
