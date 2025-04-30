@@ -376,9 +376,10 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
         with slicer.util.tryWithErrorDisplay(
             _("Failed to compute results."), waitCursor=True
         ):
-            
+            '''
             newTable = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLTableNode")
             self._parameterNode.resultsTable = newTable
+            '''
 
             self.logic.segmentFromModels(
                 self._parameterNode.inputVolume,
@@ -651,8 +652,10 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
 
         if isMed:
             segNode.SetName("MM")
+            men_model_name =  self.getParameterNode().medialModel.GetName()
         else:
             segNode.SetName("LM")
+            men_model_name =  self.getParameterNode().lateralModel.GetName()
 
     #rename volume node?
         inputVolume.SetName("MRI")
@@ -670,14 +673,44 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
 
         segStatLogic.computeStatistics()
         
-        segStatLogic.exportToTable(self.getParameterNode().resultsTable)
-        segStatLogic.showTable(self.getParameterNode().resultsTable)
+        
+  
+        if not self.getParameterNode().resultsTable:
+            # Create a new table node if it doesn't exist
+            newTable = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLTableNode")
+            self.getParameterNode().resultsTable = newTable
+            segStatLogic.exportToTable(self.getParameterNode().resultsTable)
+            #segStatLogic.showTable(self.getParameterNode().resultsTable)
 
-        stats = segStatLogic.getStatistics()
-        sid = stats.get("SegmentIDs")
-    
-        outputFilename = slicer.app.temporaryPath + f'{segNode.GetName()}'+"SegmentStatistics.csv"
-        #open this directory
+        else:
+            # Append to the existing table node
+            statistics = segStatLogic.getStatistics()        
+            temp_table = self.getParameterNode().resultsTable
+            keys = segStatLogic.getNonEmptyKeys()
+             # Fill columns
+            for segmentID in statistics["SegmentIDs"]:
+                rowIndex = temp_table.AddEmptyRow()
+                columnIndex = 0
+                for key in keys:
+                    value = statistics[segmentID, key] if (segmentID, key) in statistics else None
+                    if value is None and key != segStatLogic.segmentColumnName:
+                        value = float("nan")
+                    if isinstance(value, list):
+                        for i in range(len(value)):
+                            temp_table.GetTable().GetColumn(columnIndex).SetComponent(rowIndex, i, value[i])
+                    else:
+                        temp_table.GetTable().GetColumn(columnIndex).SetValue(rowIndex, value)
+                    columnIndex += 1
+
+        
+            segStatLogic.showTable(temp_table)
+
+        #stats = segStatLogic.getStatistics()
+        #sid = stats.get("SegmentIDs")
+
+        outputFilename = os.path.join(slicer.app.temporaryPath, f"{men_model_name}_SegmentStatistics.csv")
+        # TODO: open this directory
+        print(outputFilename)
         segStatLogic.exportToCSVFile(outputFilename)
 
 
