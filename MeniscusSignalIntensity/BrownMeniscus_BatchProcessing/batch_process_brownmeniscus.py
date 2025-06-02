@@ -1,5 +1,12 @@
 import glob
 import os
+import slicer
+import DICOMLib
+from DICOMLib import DICOMUtils
+from DICOM import DICOMWidget #slicer.util.selectModule("DICOM")
+from MeniscusSignalIntensity import MeniscusSignalIntensityLogic as mL
+
+
 
 
 def meniscusSItoTable(inputVolume, medModel, latModel, anatomy):
