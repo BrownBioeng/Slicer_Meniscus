@@ -319,62 +319,81 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
 
             if self.ui.right_rb.isChecked():
                 # meniscus centroid and planes
-                self.logic.compute_model_parameters(
-                    self.ui.inputVolSelector.currentNode(),
+                pAnt, pPost = self.logic.generateCutPlaneCoords_fromMenicus(
                     self.ui.inputMedialSelector.currentNode(),
                     True,
                 )
+                self._parameterNode.medAntPlane = pAnt
+                self._parameterNode.medPostPlane = pPost
 
-                self.logic.compute_model_parameters(
-                    self.ui.inputVolSelector.currentNode(),
+                pAnt, pPost = self.logic.generateCutPlaneCoords_fromMenicus(
                     self.ui.inputLateralSelector.currentNode(),
                     False,
                 )
+                self._parameterNode.latAntPlane = pAnt
+                self._parameterNode.latPostPlane = pPost    
+
                 """using the anterior and posterior defined planes, cute each meniscus into
                 anterior, mid and posterior sections."""
 
-                self.logic.cutModelFromPlanes(
+                antModel, midModel, postModel = self.logic.cutModelFromPlanes(
                     self.ui.inputMedialSelector.currentNode(),
                     self._parameterNode.medAntPlane,
                     self._parameterNode.medPostPlane,
                     medTrue,
-                )
-                self.logic.cutModelFromPlanes(
+                )            
+                self._parameterNode.medAntModel = antModel
+                self._parameterNode.medMidModel = midModel
+                self._parameterNode.medPostModel = postModel
+
+                antModel, midModel, postModel = self.logic.cutModelFromPlanes(
                     self.ui.inputLateralSelector.currentNode(),
                     self._parameterNode.latAntPlane,
                     self._parameterNode.latPostPlane,
                     latTrue,
                 )
+                self._parameterNode.latAntModel = antModel
+                self._parameterNode.latMidModel = midModel
+                self._parameterNode.latPostModel = postModel
+
             else:
                 
-                self.logic.compute_model_parameters(
-                    self.ui.inputVolSelector.currentNode(),
+                pAnt, pPost =self.logic.generateCutPlaneCoords_fromMenicus(
                     self.ui.inputLateralSelector.currentNode(),
                     True,
                 )
+                self._parameterNode.medAntPlane = pAnt
+                self._parameterNode.medPostPlane = pPost
 
-                self.logic.compute_model_parameters(
-                    self.ui.inputVolSelector.currentNode(),
+                pAnt, pPost = self.logic.generateCutPlaneCoords_fromMenicus(
                     self.ui.inputMedialSelector.currentNode(),
                     False,
                 )
-                
+                self._parameterNode.latAntPlane = pAnt
+                self._parameterNode.latPostPlane = pPost
+
                 """using the anterior and posterior defined planes, cute each meniscus into
                 anterior, mid and posterior sections."""
 
-                self.logic.cutModelFromPlanes(
+                antModel, midModel, postModel = self.logic.cutModelFromPlanes(
                     self.ui.inputLateralSelector.currentNode(),
                     self._parameterNode.medAntPlane,
                     self._parameterNode.medPostPlane,
                     medTrue,
                 )
-                self.logic.cutModelFromPlanes(
+                self._parameterNode.medAntModel = antModel
+                self._parameterNode.medMidModel = midModel
+                self._parameterNode.medPostModel = postModel
+
+                antModel, midModel, postModel = self.logic.cutModelFromPlanes(
                     self.ui.inputMedialSelector.currentNode(),
                     self._parameterNode.latAntPlane,
                     self._parameterNode.latPostPlane,
                     latTrue,
                 )
-
+                self._parameterNode.latAntModel = antModel
+                self._parameterNode.latMidModel = midModel
+                self._parameterNode.latPostModel = postModel
 
 
             #hide input model and color each output here?
@@ -408,21 +427,27 @@ class MeniscusSignalIntensityWidget(ScriptedLoadableModuleWidget, VTKObservation
             newTable = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLTableNode")
             self._parameterNode.resultsTable = newTable
             '''
+            outdir = slicer.app.temporaryPath
 
-            self.logic.segmentFromModels(
+            resTable = self.logic.segmentFromModels(
+                outdir,
                 self._parameterNode.inputVolume,
                 self._parameterNode.medAntModel,
                 self._parameterNode.medMidModel,
                 self._parameterNode.medPostModel,
                 medTrue,
+                self.ui.inputMedialSelector.currentNode().GetName(),
             )       
 
             self.logic.segmentFromModels(
+                outdir,
                 self._parameterNode.inputVolume,
                 self._parameterNode.latAntModel,
                 self._parameterNode.latMidModel,
                 self._parameterNode.latPostModel,
                 latTrue,
+                self.ui.inputLateralSelector.currentNode().GetName(),
+                resTable
             )
         
 
@@ -453,7 +478,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
     def getParameterNode(self):
         return MeniscusSignalIntensityParameterNode(super().getParameterNode())
 
-    def compute_model_parameters(
+    '''def compute_model_parameters(
         self,
         inputVolume: vtkMRMLScalarVolumeNode,
         inputModel: vtkMRMLModelNode,
@@ -465,10 +490,10 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
             raise ValueError("Input or output volume is invalid")
 
         # centroid, and corner extents for cut planes
-        self._generateCutPlaneCoords_fromMenicus(inputModel, isMed)
+        self.generateCutPlaneCoords_fromMenicus(inputModel, isMed)
+    '''
 
-
-    def _generateCutPlaneCoords_fromMenicus(self, modelNode, isMed) -> None:
+    def generateCutPlaneCoords_fromMenicus(self, modelNode, isMed) -> tuple[vtkMRMLMarkupsPlaneNode, vtkMRMLMarkupsPlaneNode]:
 
         # Workflow:
         # bounds from model
@@ -557,15 +582,17 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
 
         roiNode.SetLocked(True)  # Lock the ROI to prevent user modifications
         roiNode.SetDisplayVisibility(False)
-
-        #set parameter nodes by planes
+        '''
         if isMed:
             self.getParameterNode().medAntPlane = pAnt
             self.getParameterNode().medPostPlane = pPost
         else:
             self.getParameterNode().latAntPlane = pAnt
             self.getParameterNode().latPostPlane = pPost
-
+        '''
+        return pAnt, pPost
+        #set parameter nodes by planes
+        
 
     def cutModelFromPlanes(
         self,
@@ -573,7 +600,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         antPlane: vtkMRMLMarkupsPlaneNode,
         postPlane: vtkMRMLMarkupsPlaneNode,
         isMed: bool = True,
-    ) -> None:
+    ) -> tuple[vtkMRMLModelNode, vtkMRMLModelNode, vtkMRMLModelNode]:
         """Cut the input model using the ant, post planes."""
 
         #Output models"
@@ -624,7 +651,7 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         planeModeler.SetNodeReferenceID("PlaneCut.OutputNegativeModel", outPostNegID)
         slicer.modules.dynamicmodeler.logic().RunDynamicModelerTool(planeModeler)
    
-   
+        '''
         if isMed:
             self.getParameterNode().medAntModel = antModel
             self.getParameterNode().medMidModel = midModel
@@ -633,20 +660,26 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
             self.getParameterNode().latAntModel = antModel
             self.getParameterNode().latMidModel = midModel
             self.getParameterNode().latPostModel = postModel
+        '''
 
         #Remove the planeModeler node from the scene
         slicer.mrmlScene.RemoveNode(planeModeler)
         slicer.mrmlScene.RemoveNode(mixModel)
 
+        return antModel, midModel, postModel
+
 
     def segmentFromModels(
         self,
+        outfdir: str,
         inputVolume: vtkMRMLScalarVolumeNode,
         antModel: vtkMRMLModelNode,
         midModel: vtkMRMLModelNode,
         postModel: vtkMRMLModelNode,
         isMed: bool = True,
-        ) -> None:
+        men_model_name: Optional[str] = None,
+        resultsTable: Optional[vtkMRMLTableNode] = None,
+        ) -> Optional[vtkMRMLTableNode]:
         #create Segmentation nodes the input volume using the ant, mid, post models.
         #https://github.com/jzeyl/3D-Slicer-Scripts/blob/master/1_set%20up%20volume%20and%20segmentation%20nodes.py
         
@@ -671,10 +704,10 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
 
         if isMed:
             segNode.SetName("MM")
-            men_model_name =  self.getParameterNode().medialModel.GetName()
+            #men_model_name =  self.getParameterNode().medialModel.GetName()
         else:
             segNode.SetName("LM")
-            men_model_name =  self.getParameterNode().lateralModel.GetName()
+            #men_model_name =  self.getParameterNode().lateralModel.GetName()
 
     #rename volume node?
         inputVolume.SetName("MRI")
@@ -694,17 +727,17 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         
         
   
-        if not self.getParameterNode().resultsTable:
+        if not resultsTable:
             # Create a new table node if it doesn't exist
             newTable = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLTableNode")
-            self.getParameterNode().resultsTable = newTable
-            segStatLogic.exportToTable(self.getParameterNode().resultsTable)
+            resultsTable = newTable
+            segStatLogic.exportToTable(resultsTable)
             #segStatLogic.showTable(self.getParameterNode().resultsTable)
 
         else:
             # Append to the existing table node
             statistics = segStatLogic.getStatistics()        
-            temp_table = self.getParameterNode().resultsTable
+            temp_table = resultsTable
             keys = segStatLogic.getNonEmptyKeys()
              # Fill columns
             for segmentID in statistics["SegmentIDs"]:
@@ -727,11 +760,12 @@ class MeniscusSignalIntensityLogic(ScriptedLoadableModuleLogic):
         #stats = segStatLogic.getStatistics()
         #sid = stats.get("SegmentIDs")
 
-        outputFilename = os.path.join(slicer.app.temporaryPath, f"{men_model_name}_SegmentStatistics.csv")
+        outputFilename = os.path.join(outfdir, f"{men_model_name}_SegmentStatistics.csv")
         # TODO: open this directory
         print(outputFilename)
         segStatLogic.exportToCSVFile(outputFilename)
 
+        return resultsTable
 
             
 #
